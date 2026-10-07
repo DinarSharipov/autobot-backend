@@ -5,6 +5,9 @@ Autobot is a Telegram-first service for creating, scheduling, moderating, and pu
 
 This repository contains the core backend and infrastructure. The Telegram client lives in `DinarSharipov/autobot`.
 
+## Communication
+- All communication with the project owner must be in Russian unless the owner explicitly asks for another language.
+
 ## Technology stack
 - Node.js
 - TypeScript
