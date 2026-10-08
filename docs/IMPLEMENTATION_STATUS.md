@@ -1,33 +1,34 @@
 # IMPLEMENTATION_STATUS.md
 
 ## Current status
-Repository initialized. Architecture documentation updated for the standalone Web Admin and Telegram authentication requirements.
+Repository initialized. Architecture updated to move Web Admin into its own repository and future server.
 
 ## Approved architecture
-- [x] Repository contains all non-bot services
+- [x] Backend-only repository
+- [x] Web Admin moved to `DinarSharipov/autobot-web`
+- [x] Web Admin will deploy to a different future server
 - [x] NestJS API is the central application boundary
-- [x] Prisma
-- [x] PostgreSQL
-- [x] Redis
-- [x] BullMQ
+- [x] Prisma + PostgreSQL
+- [x] Redis + BullMQ
 - [x] Docker
-- [x] React + TypeScript standalone Web Admin
-- [x] REST API required in MVP
-- [x] grammY bot and Web Admin are independent clients
-- [x] Shared user/domain model between clients
-- [x] Telegram-based Web Admin authentication
-- [x] AuthIdentity/provider model with TELEGRAM identity
+- [x] REST API shared by bot and Web Admin
+- [x] Telegram-based Web Admin authentication belongs to backend
+- [x] Shared user/domain model
 - [x] Secure cookie-based browser session
-- [x] No auth bearer tokens in localStorage
-- [x] No email/password auth in MVP
 - [x] Telegram Mini App / Web App excluded
 - [x] Shared bot/API network: `autobot-shared`
 - [x] Private backend network: `backend-internal`
-- [x] API Docker DNS alias: `autobot-api`
-- [x] Bot has no direct DB/Redis access
-- [x] Backend independent from grammY and React
-- [x] Workers initially may run in API container
-- [x] Future worker container supported by architecture
+- [x] Web Admin does not join backend Docker networks
+- [x] Public HTTPS API required for Web Admin
+
+## CI/CD
+- [x] `SERVER_HOST` configured in GitHub Actions
+- [x] `SERVER_PORT` configured in GitHub Actions
+- [x] `SERVER_USER` configured in GitHub Actions
+- [x] Dedicated `SERVER_SSH_KEY` configured
+- [x] `SERVER_KNOWN_HOSTS` configured
+- [ ] GitHub Actions workflow implementation
+- [ ] First deployment validation
 
 ## Product decisions captured
 - [x] Immediate one-time posts
@@ -38,23 +39,13 @@ Repository initialized. Architecture documentation updated for the standalone We
 - [x] Revision requests before approval
 - [x] Subscription-based channel/topic/moderation/image limits
 - [x] Shared moderation state between bot and Web Admin
-- [x] Web Admin: Dashboard
-- [x] Web Admin: publications/posts
-- [x] Web Admin: calendar
-- [x] Web Admin: topics
-- [x] Web Admin: schedules
-- [x] Web Admin: channels
-- [x] Web Admin: moderation
-- [x] Web Admin: publication history
-- [x] Web Admin: subscription/usage
 
 ## Implementation progress
-- [ ] Repository/app workspace scaffold
 - [ ] NestJS scaffold
-- [ ] React Web Admin scaffold
 - [ ] Configuration
 - [ ] Telegram authentication
 - [ ] Session management
+- [ ] CORS/public HTTPS API configuration
 - [ ] Prisma schema
 - [ ] PostgreSQL runtime
 - [ ] Redis runtime
@@ -69,12 +60,7 @@ Repository initialized. Architecture documentation updated for the standalone We
 - [ ] AI adapters
 - [ ] Subscription/usage module
 - [ ] Telegram publisher
-- [ ] Web Admin dashboard
-- [ ] Web Admin posts/calendar
-- [ ] Web Admin topics/schedules/channels
-- [ ] Web Admin moderation/history/subscription
 - [ ] Docker Compose
-- [ ] Public HTTPS routing for Web Admin/API
 - [ ] Health checks
-- [ ] CI/CD
+- [ ] CI/CD workflow
 - [ ] Automated tests
