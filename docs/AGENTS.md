@@ -3,13 +3,16 @@
 ## Project
 Autobot is a Telegram-first service for creating, scheduling, moderating, and publishing AI-generated posts to Telegram channels.
 
-This repository contains all non-bot services: the core backend, infrastructure, and the standalone Web Admin. The Telegram client lives in `DinarSharipov/autobot`.
+This repository contains the core backend and backend infrastructure only.
+
+Related repositories:
+- `DinarSharipov/autobot` — grammY Telegram bot.
+- `DinarSharipov/autobot-web` — standalone React Web Admin.
 
 ## Communication
 - All communication with the project owner must be in Russian unless the owner explicitly asks for another language.
 
 ## Technology stack
-Backend:
 - Node.js
 - TypeScript
 - NestJS
@@ -17,89 +20,71 @@ Backend:
 - PostgreSQL
 - Redis
 - BullMQ
-
-Web Admin:
-- React
-- TypeScript
-
-Infrastructure:
 - Docker
 
 ## Architectural role
-This repository is the business and service core of Autobot. It owns domain state, validation, authentication, subscription rules, AI orchestration, scheduling, queues, Telegram publication, and the standalone browser administration client.
+This repository is the business core of Autobot. It owns domain state, validation, authentication, subscription rules, AI orchestration, scheduling, queues, and Telegram publication.
 
-The NestJS API is the central application boundary and MUST NOT depend on grammY or on Web Admin UI code.
+The NestJS API is the central application boundary and MUST NOT depend on grammY or React UI code.
 
 Expected architecture:
 ```
-Telegram -> grammY bot ----                            -> REST API -> Application/Domain layer
-Browser -> React Web Admin-/               |-> PostgreSQL
-                                            |-> Redis/BullMQ
-                                            |-> AI providers
-                                            -> Telegram Bot API
+Telegram -> grammY bot -> internal HTTP ----\
+                                             -> NestJS API -> Application/Domain
+Browser -> React Web Admin -> public HTTPS -/                 |-> PostgreSQL
+                                                               |-> Redis/BullMQ
+                                                               |-> AI providers
+                                                               -> Telegram Bot API
 ```
 
-Both grammY and Web Admin are independent clients of the same backend and must operate on the same user/domain data.
+The bot and backend are deployed on the same server. The Web Admin is deployed to a different server and reaches the backend only through the public HTTPS API.
 
-## Web Admin
-A standalone Web Admin is REQUIRED in MVP.
+## Web Admin integration
+Web Admin lives in `DinarSharipov/autobot-web` and is not implemented or deployed from this repository.
 
-Requirements:
-- regular browser application, not Telegram Mini App / Telegram Web App
-- React + TypeScript
-- Telegram-based authentication
-- same Autobot account as the Telegram bot
-- REST API is required in MVP and must support both clients
+Backend requirements for Web Admin:
+- REST API available over HTTPS
+- Telegram-based authentication endpoints
+- same application user/domain model as the bot
+- credentialed CORS restricted to configured Web Admin origin(s)
+- secure browser sessions
+- state changes made through one client immediately visible to the other through persisted backend state
 
-Main Web Admin areas:
-- Dashboard
-- Publications/posts
-- Calendar
-- Topics
-- Schedules
-- Channels
-- Moderation
-- Publication history
-- Subscription/usage
-
-Telegram Mini App / Telegram Web App is excluded from the current product plan.
+Telegram Mini App / Telegram Web App is excluded from the product plan.
 
 ## Authentication
-Web Admin authentication must use Telegram identity.
+Web Admin authentication uses Telegram identity.
 
 Architecture requirements:
-- introduce an authentication module in the backend
-- model external identities explicitly, for example `AuthIdentity` with provider `TELEGRAM`
-- Telegram bot identity and Web Admin identity must resolve to the same application user
-- after Telegram login, establish a secure server-side/browser session
-- use HttpOnly + Secure + appropriate SameSite cookies
-- do not store authentication bearer tokens in localStorage
-- email/password authentication is out of scope for MVP
+- authentication module in backend
+- external identity model such as `AuthIdentity` with provider `TELEGRAM`
+- bot identity and Web Admin identity resolve to the same `User`
+- secure server-side/browser session after login
+- HttpOnly + Secure cookies with SameSite policy appropriate to final production domains
+- no bearer token persistence in browser localStorage
+- email/password auth is out of scope for MVP
 - alternative identity providers are out of scope for MVP
 
 ## Docker topology
-All services are deployed on the same server.
-
-Target containers:
+Current backend server containers:
 - `autobot-api`
-- `autobot-web`
 - `autobot-postgres`
 - `autobot-redis`
 
-The bot is deployed separately from the `autobot` repository as `autobot-bot`.
+Telegram bot is deployed from `DinarSharipov/autobot` to the same server as `autobot-bot`.
 
 Networks:
-- `autobot-shared`: external shared network between `autobot-bot` and `autobot-api`
+- `autobot-shared`: external network between `autobot-bot` and `autobot-api`
 - `backend-internal`: internal network for API, PostgreSQL, and Redis
-
-Only the API should be reachable by the bot. PostgreSQL and Redis must stay on `backend-internal`.
 
 Internal bot-to-backend URL:
 ```
 http://autobot-api:3000
 ```
 
-The browser-facing Web Admin and API must be exposed through HTTPS/public routing without exposing PostgreSQL or Redis.
+Web Admin does NOT join these Docker networks because it will run on another server.
+
+PostgreSQL and Redis must never be publicly exposed. Only the required backend HTTPS entry point is public for Web Admin.
 
 ## Core responsibilities
 Backend modules should include:
@@ -129,7 +114,7 @@ Publishing modes:
 - AUTO: generated content proceeds to publication automatically
 - MODERATION: generated content waits for user review; revisions may be requested before approval
 
-Subscription/entitlement rules must be centralized, for example through `EntitlementService` and `UsageService`. Do not scatter plan checks across controllers or UI clients.
+Subscription/entitlement rules must be centralized, for example through `EntitlementService` and `UsageService`.
 
 At minimum subscription policy controls:
 - number of channels
@@ -156,8 +141,6 @@ Keep these concepts separate:
 - PostVersion
 - PostSchedule
 - Publication
-
-A post may have multiple generated/revised versions during moderation.
 
 Likely entities:
 - User
@@ -187,4 +170,4 @@ Likely entities:
 - Use Redis for queues/ephemeral coordination, not as the source of truth.
 - Keep the API independent from grammY and React.
 - Bot and Web Admin must not duplicate business rules.
-- State changes from one client must be visible from the other through the common backend.
+- Never assume the Web Admin is reachable through local Docker DNS.
