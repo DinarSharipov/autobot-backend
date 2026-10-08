@@ -1,0 +1,8 @@
+extends:
+  - recommended
+
+rules:
+  # This repository has no declared public license yet.
+  info-license: off
+  # Telegram login endpoints intentionally complete with HTTP redirects.
+  operation-2xx-response: off

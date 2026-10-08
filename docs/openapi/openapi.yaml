@@ -1,0 +1,1399 @@
+openapi: 3.1.0
+info:
+  title: Autobot Backend API
+  version: 0.1.0
+  description: |
+    Initial Stage 1 contract shared by the grammY bot and standalone Web Admin.
+    Browser calls use the session cookie. Bot calls use the HMAC headers defined
+    in ADR 0003 and include X-Telegram-User-Id for user-scoped operations.
+    GPT conversation transcripts and generated image content are not persisted.
+servers:
+  - url: https://api.example.invalid/api/v1
+    description: Public Web Admin boundary; configured per environment
+  - url: http://autobot-api:3000/api/v1
+    description: Internal Docker network boundary for autobot-bot
+tags:
+  - name: Auth
+    description: Telegram OIDC login and browser session lifecycle
+  - name: Users
+    description: Current-user identity and dashboard views
+  - name: Channels
+    description: Owned Telegram channel management and validation
+  - name: Topics
+    description: Reusable content topics and prompt templates
+  - name: Posts
+    description: Post definitions and immutable generated versions
+  - name: Moderation
+    description: Approval, rejection, and revision workflows
+  - name: Schedules
+    description: One-time and recurring schedule management
+  - name: Publications
+    description: Durable publication occurrences and history
+  - name: Subscription
+    description: Effective entitlements and usage
+  - name: Internal
+    description: HMAC-authenticated bot integration endpoints
+security:
+  - cookieSession: []
+  - botSignature: []
+paths:
+  /auth/telegram/start:
+    get:
+      tags: [Auth]
+      operationId: startTelegramLogin
+      summary: Start Telegram OIDC Authorization Code + PKCE login
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        "302":
+          description: Redirect to Telegram authorization endpoint
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /auth/telegram/callback:
+    get:
+      tags: [Auth]
+      operationId: completeTelegramLogin
+      summary: Validate Telegram callback and establish browser session
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302":
+          description: Set the session cookie and redirect to the validated Web Admin return URL
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/session:
+    get:
+      tags: [Auth]
+      operationId: getSession
+      summary: Bootstrap the current browser session
+      security:
+        - cookieSession: []
+      responses:
+        "200":
+          description: Active authenticated session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SessionView"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/csrf:
+    get:
+      tags: [Auth]
+      operationId: getCsrfToken
+      summary: Obtain a session-bound CSRF token for browser mutations
+      security:
+        - cookieSession: []
+      responses:
+        "200":
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [token]
+                    properties:
+                      token: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Revoke the current browser session
+      security:
+        - cookieSession: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204": { description: Session revoked and cookie cleared }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /internal/telegram-users/resolve:
+    post:
+      tags: [Internal]
+      operationId: resolveTelegramUser
+      summary: Resolve or onboard the bot caller's Telegram user
+      description: Available only to the authenticated autobot-bot service.
+      security:
+        - botSignature: []
+      parameters:
+        - $ref: "#/components/parameters/BotService"
+        - $ref: "#/components/parameters/BotKeyId"
+        - $ref: "#/components/parameters/BotTimestamp"
+        - $ref: "#/components/parameters/BotNonce"
+        - $ref: "#/components/parameters/TelegramUserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramProfileInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /me:
+    get:
+      tags: [Users]
+      operationId: getCurrentUser
+      summary: Get the current application user
+      responses:
+        "200":
+          $ref: "#/components/responses/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /dashboard:
+    get:
+      tags: [Users]
+      operationId: getDashboard
+      summary: Get dashboard counters and recent activity
+      responses:
+        "200":
+          description: Dashboard view
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Dashboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /channels:
+    get:
+      tags: [Channels]
+      operationId: listChannels
+      summary: List owned channels
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ChannelStatus"
+      responses:
+        "200":
+          description: Channel page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Channels]
+      operationId: createChannel
+      summary: Link and verify a Telegram channel
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChannelCreate"
+      responses:
+        "201":
+          $ref: "#/components/responses/ChannelResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /channels/{channelId}:
+    parameters:
+      - $ref: "#/components/parameters/ChannelId"
+    get:
+      tags: [Channels]
+      operationId: getChannel
+      summary: Get one owned channel
+      responses:
+        "200":
+          $ref: "#/components/responses/ChannelResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Channels]
+      operationId: updateChannel
+      summary: Update owned channel metadata
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChannelUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/ChannelResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Channels]
+      operationId: archiveChannel
+      summary: Archive an owned channel
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "204": { description: Channel archived }
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /channels/{channelId}/verify:
+    post:
+      tags: [Channels]
+      operationId: verifyChannel
+      summary: Revalidate Telegram channel access and bot permissions
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/ChannelResponse"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /topics:
+    get:
+      tags: [Topics]
+      operationId: listTopics
+      summary: List owned topics
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Topic page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Topics]
+      operationId: createTopic
+      summary: Create a topic
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicCreate"
+      responses:
+        "201":
+          $ref: "#/components/responses/TopicResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /topics/{topicId}:
+    parameters:
+      - $ref: "#/components/parameters/TopicId"
+    get:
+      tags: [Topics]
+      operationId: getTopic
+      summary: Get one owned topic
+      responses:
+        "200":
+          $ref: "#/components/responses/TopicResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Topics]
+      operationId: updateTopic
+      summary: Update an owned topic
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/TopicResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Topics]
+      operationId: archiveTopic
+      summary: Archive an owned topic
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "204": { description: Topic archived }
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /posts:
+    get:
+      tags: [Posts]
+      operationId: listPosts
+      summary: List owned post definitions
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: channelId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/PostStatus"
+      responses:
+        "200":
+          description: Post page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Posts]
+      operationId: createPost
+      summary: Create a reusable post definition
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostCreate"
+      responses:
+        "201":
+          $ref: "#/components/responses/PostResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+  /posts/{postId}:
+    parameters:
+      - $ref: "#/components/parameters/PostId"
+    get:
+      tags: [Posts]
+      operationId: getPost
+      summary: Get one owned post definition
+      responses:
+        "200":
+          $ref: "#/components/responses/PostResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Posts]
+      operationId: updatePost
+      summary: Update an owned post definition
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/PostResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Posts]
+      operationId: archivePost
+      summary: Archive an owned post definition
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "204": { description: Post archived }
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /posts/{postId}/versions:
+    get:
+      tags: [Posts]
+      operationId: listPostVersions
+      summary: List immutable versions of a post
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostVersionPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /posts/{postId}/publications:
+    post:
+      tags: [Posts, Publications]
+      operationId: createImmediatePublication
+      summary: Start one immediate publication occurrence
+      parameters:
+        - $ref: "#/components/parameters/PostId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "202":
+          $ref: "#/components/responses/PublicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /moderation:
+    get:
+      tags: [Moderation]
+      operationId: listModerationRequests
+      summary: List moderation requests
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ModerationStatus"
+      responses:
+        "200":
+          description: Moderation request page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /moderation/{moderationRequestId}/approve:
+    post:
+      tags: [Moderation]
+      operationId: approveModeration
+      summary: Approve the current generated version
+      parameters:
+        - $ref: "#/components/parameters/ModerationRequestId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "202":
+          $ref: "#/components/responses/PublicationResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /moderation/{moderationRequestId}/revision:
+    post:
+      tags: [Moderation]
+      operationId: requestRevision
+      summary: Request a revised generated version
+      parameters:
+        - $ref: "#/components/parameters/ModerationRequestId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [feedback]
+              properties:
+                feedback:
+                  type: string
+                  minLength: 1
+                  maxLength: 4000
+      responses:
+        "202":
+          $ref: "#/components/responses/PublicationResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /moderation/{moderationRequestId}/reject:
+    post:
+      tags: [Moderation]
+      operationId: rejectModeration
+      summary: Reject and cancel the moderated publication
+      parameters:
+        - $ref: "#/components/parameters/ModerationRequestId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/PublicationResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /schedules:
+    get:
+      tags: [Schedules]
+      operationId: listSchedules
+      summary: List owned schedules
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScheduleStatus"
+      responses:
+        "200":
+          description: Schedule page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Schedules]
+      operationId: createSchedule
+      summary: Create a one-time or recurring schedule
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleCreate"
+      responses:
+        "201":
+          $ref: "#/components/responses/ScheduleResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+  /schedules/{scheduleId}:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    get:
+      tags: [Schedules]
+      operationId: getSchedule
+      summary: Get one owned schedule
+      responses:
+        "200":
+          $ref: "#/components/responses/ScheduleResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Schedules]
+      operationId: updateSchedule
+      summary: Update a schedule before future occurrences materialize
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleUpdate"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScheduleResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Schedules]
+      operationId: cancelSchedule
+      summary: Cancel a schedule permanently
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "204": { description: Schedule cancelled }
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /schedules/{scheduleId}/pause:
+    post:
+      tags: [Schedules]
+      operationId: pauseSchedule
+      summary: Pause future occurrence materialization
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScheduleResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /schedules/{scheduleId}/resume:
+    post:
+      tags: [Schedules]
+      operationId: resumeSchedule
+      summary: Resume future occurrence materialization
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/ScheduleResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /calendar:
+    get:
+      tags: [Schedules, Publications]
+      operationId: getCalendar
+      summary: List publication occurrences in a time range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: channelId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Calendar occurrences in the inclusive/exclusive range
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CalendarItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /publications:
+    get:
+      tags: [Publications]
+      operationId: listPublications
+      summary: List publication history and active occurrences
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/PublicationStatus"
+        - name: postId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Publication page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /publications/{publicationId}:
+    get:
+      tags: [Publications]
+      operationId: getPublication
+      summary: Get one publication occurrence
+      parameters:
+        - $ref: "#/components/parameters/PublicationId"
+      responses:
+        "200":
+          $ref: "#/components/responses/PublicationResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /publications/{publicationId}/retry:
+    post:
+      tags: [Publications]
+      operationId: retryPublication
+      summary: Manually retry an eligible failed publication
+      parameters:
+        - $ref: "#/components/parameters/PublicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "202":
+          $ref: "#/components/responses/PublicationResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /publications/{publicationId}/cancel:
+    post:
+      tags: [Publications]
+      operationId: cancelPublication
+      summary: Cancel a publication that has not started delivery
+      parameters:
+        - $ref: "#/components/parameters/PublicationId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfTokenOptional"
+      responses:
+        "200":
+          $ref: "#/components/responses/PublicationResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /subscription:
+    get:
+      tags: [Subscription]
+      operationId: getSubscription
+      summary: Get the effective plan and entitlements
+      responses:
+        "200":
+          description: Effective subscription and entitlements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/SubscriptionSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /usage:
+    get:
+      tags: [Subscription]
+      operationId: getUsage
+      summary: Get usage for the current quota period
+      responses:
+        "200":
+          description: Current quota-period usage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/UsageSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: __Host-autobot_session
+      description: Opaque browser session cookie.
+    botSignature:
+      type: apiKey
+      in: header
+      name: X-Autobot-Signature
+      description: HMAC signature plus the companion ADR 0003 headers.
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^"[0-9]+"$'
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string }
+    CsrfTokenOptional:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required for cookie-authenticated browser mutations; omitted for HMAC-authenticated bot calls.
+      schema: { type: string }
+    BotService:
+      name: X-Autobot-Service
+      in: header
+      required: true
+      schema: { type: string, const: autobot-bot }
+    BotKeyId:
+      name: X-Autobot-Key-Id
+      in: header
+      required: true
+      schema: { type: string }
+    BotTimestamp:
+      name: X-Autobot-Timestamp
+      in: header
+      required: true
+      schema: { type: string, pattern: "^[0-9]+$" }
+    BotNonce:
+      name: X-Autobot-Nonce
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    TelegramUserId:
+      name: X-Telegram-User-Id
+      in: header
+      required: true
+      schema: { type: string, pattern: "^[0-9]+$" }
+    ChannelId:
+      name: channelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TopicId:
+      name: topicId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PostId:
+      name: postId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ModerationRequestId:
+      name: moderationRequestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PublicationId:
+      name: publicationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Missing, invalid, or expired authentication
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Ownership or entitlement denial
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Idempotency, concurrency, duplicate, or state conflict
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unprocessable:
+      description: Domain validation failed
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    ServiceUnavailable:
+      description: A required dependency or configuration is unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UserResponse:
+      description: User response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/User" }
+    ChannelResponse:
+      description: Channel response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/Channel" }
+    TopicResponse:
+      description: Topic response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/Topic" }
+    PostResponse:
+      description: Post response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/Post" }
+    ScheduleResponse:
+      description: Schedule response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/Schedule" }
+    PublicationResponse:
+      description: Publication response
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data: { $ref: "#/components/schemas/Publication" }
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+            requestId: { type: string }
+    PageInfo:
+      type: object
+      additionalProperties: false
+      required: [nextCursor, hasMore]
+      properties:
+        nextCursor: { type: [string, "null"] }
+        hasMore: { type: boolean }
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, status, locale, timezone, telegram, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, BLOCKED] }
+        locale: { type: string }
+        timezone: { type: string }
+        telegram: { $ref: "#/components/schemas/TelegramProfile" }
+        createdAt: { type: string, format: date-time }
+    TelegramProfile:
+      type: object
+      additionalProperties: false
+      required: [telegramUserId]
+      properties:
+        telegramUserId: { type: string, pattern: "^[0-9]+$" }
+        username: { type: [string, "null"] }
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        photoUrl: { type: [string, "null"], format: uri }
+    TelegramProfileInput:
+      type: object
+      additionalProperties: false
+      properties:
+        username: { type: [string, "null"] }
+        firstName: { type: [string, "null"], maxLength: 255 }
+        lastName: { type: [string, "null"], maxLength: 255 }
+        languageCode: { type: [string, "null"], maxLength: 16 }
+    SessionView:
+      type: object
+      additionalProperties: false
+      required: [user, expiresAt]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        expiresAt: { type: string, format: date-time }
+    ChannelStatus:
+      type: string
+      enum: [PENDING, ACTIVE, INVALID, ARCHIVED]
+    Channel:
+      type: object
+      additionalProperties: false
+      required: [id, telegramChatId, title, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        telegramChatId: { type: string, pattern: "^-?[0-9]+$" }
+        title: { type: string }
+        username: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/ChannelStatus" }
+        verifiedAt: { type: [string, "null"], format: date-time }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ChannelCreate:
+      type: object
+      additionalProperties: false
+      required: [telegramChatId]
+      properties:
+        telegramChatId: { type: string, pattern: "^-?[0-9]+$" }
+    ChannelUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+    ChannelPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    TopicStatus:
+      type: string
+      enum: [ACTIVE, ARCHIVED]
+    Topic:
+      type: object
+      additionalProperties: false
+      required: [id, name, promptTemplate, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        promptTemplate: { type: string }
+        status: { $ref: "#/components/schemas/TopicStatus" }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TopicCreate:
+      type: object
+      additionalProperties: false
+      required: [name, promptTemplate]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        promptTemplate: { type: string, minLength: 1, maxLength: 20000 }
+    TopicUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        promptTemplate: { type: string, minLength: 1, maxLength: 20000 }
+    TopicPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Topic" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    PublicationMode:
+      type: string
+      enum: [AUTO, MODERATION]
+    PostStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, ARCHIVED, CANCELLED]
+    Post:
+      type: object
+      additionalProperties: false
+      required: [id, channelId, prompt, generateImage, publicationMode, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        channelId: { type: string, format: uuid }
+        topicId: { type: [string, "null"], format: uuid }
+        title: { type: [string, "null"] }
+        prompt: { type: string }
+        generateImage: { type: boolean }
+        publicationMode: { $ref: "#/components/schemas/PublicationMode" }
+        status: { $ref: "#/components/schemas/PostStatus" }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PostCreate:
+      type: object
+      additionalProperties: false
+      required: [channelId, prompt, publicationMode]
+      properties:
+        channelId: { type: string, format: uuid }
+        topicId: { type: [string, "null"], format: uuid }
+        title: { type: [string, "null"], maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        generateImage: { type: boolean, default: false }
+        publicationMode: { $ref: "#/components/schemas/PublicationMode" }
+    PostUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        channelId: { type: string, format: uuid }
+        topicId: { type: [string, "null"], format: uuid }
+        title: { type: [string, "null"], maxLength: 255 }
+        prompt: { type: string, minLength: 1, maxLength: 20000 }
+        generateImage: { type: boolean }
+        publicationMode: { $ref: "#/components/schemas/PublicationMode" }
+    PostPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Post" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    PostVersionStatus:
+      type: string
+      enum: [GENERATION_PENDING, GENERATING, GENERATED, APPROVED, REJECTED, SUPERSEDED, FAILED, CANCELLED]
+    PostVersion:
+      type: object
+      additionalProperties: false
+      required: [id, postId, sequence, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        postId: { type: string, format: uuid }
+        publicationId: { type: [string, "null"], format: uuid }
+        sequence: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/PostVersionStatus" }
+        text: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        generatedAt: { type: [string, "null"], format: date-time }
+    PostVersionPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/PostVersion" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    ModerationStatus:
+      type: string
+      enum: [PENDING, APPROVED, REVISION_REQUESTED, REJECTED, CANCELLED]
+    ModerationRequest:
+      type: object
+      additionalProperties: false
+      required: [id, postId, publicationId, version, postVersion, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        postId: { type: string, format: uuid }
+        publicationId: { type: string, format: uuid }
+        postVersion: { $ref: "#/components/schemas/PostVersion" }
+        status: { $ref: "#/components/schemas/ModerationStatus" }
+        feedback: { type: [string, "null"] }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, "null"], format: date-time }
+    ModerationPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/ModerationRequest" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    ScheduleKind:
+      type: string
+      enum: [ONCE, RECURRING]
+    ScheduleStatus:
+      type: string
+      enum: [ACTIVE, PAUSED, COMPLETED, CANCELLED]
+    MisfirePolicy:
+      type: string
+      enum: [FIRE_ONCE, LATEST_ONLY, SKIP]
+    Schedule:
+      type: object
+      additionalProperties: false
+      required: [id, postId, kind, status, timezone, misfirePolicy, misfireGraceSeconds, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        postId: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ScheduleKind" }
+        status: { $ref: "#/components/schemas/ScheduleStatus" }
+        timezone: { type: string }
+        runAt: { type: [string, "null"], format: date-time }
+        rrule: { type: [string, "null"] }
+        nextRunAt: { type: [string, "null"], format: date-time }
+        misfirePolicy: { $ref: "#/components/schemas/MisfirePolicy" }
+        misfireGraceSeconds: { type: integer, minimum: 0 }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ScheduleCreate:
+      oneOf:
+        - $ref: "#/components/schemas/OnceScheduleCreate"
+        - $ref: "#/components/schemas/RecurringScheduleCreate"
+      discriminator:
+        propertyName: kind
+    OnceScheduleCreate:
+      type: object
+      additionalProperties: false
+      required: [postId, kind, timezone, runAt]
+      properties:
+        postId: { type: string, format: uuid }
+        kind: { type: string, const: ONCE }
+        timezone: { type: string }
+        runAt: { type: string, format: date-time }
+        misfirePolicy: { type: string, enum: [FIRE_ONCE, SKIP], default: FIRE_ONCE }
+        misfireGraceSeconds: { type: integer, minimum: 0, default: 86400 }
+    RecurringScheduleCreate:
+      type: object
+      additionalProperties: false
+      required: [postId, kind, timezone, rrule]
+      properties:
+        postId: { type: string, format: uuid }
+        kind: { type: string, const: RECURRING }
+        timezone: { type: string }
+        rrule: { type: string }
+        misfirePolicy: { type: string, enum: [LATEST_ONLY, SKIP], default: LATEST_ONLY }
+        misfireGraceSeconds: { type: integer, minimum: 0, default: 21600 }
+    ScheduleUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        timezone: { type: string }
+        runAt: { type: string, format: date-time }
+        rrule: { type: string }
+        misfirePolicy: { $ref: "#/components/schemas/MisfirePolicy" }
+        misfireGraceSeconds: { type: integer, minimum: 0 }
+    SchedulePage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Schedule" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    PublicationStatus:
+      type: string
+      enum: [PENDING, GENERATING, AWAITING_MODERATION, READY, PUBLISHING, RETRY_WAIT, PUBLISHED, DELIVERY_UNKNOWN, FAILED, CANCELLED, SKIPPED]
+    Publication:
+      type: object
+      additionalProperties: false
+      required: [id, postId, scheduledFor, status, attemptCount, publishedWithImage, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        postId: { type: string, format: uuid }
+        scheduleId: { type: [string, "null"], format: uuid }
+        selectedVersionId: { type: [string, "null"], format: uuid }
+        scheduledFor: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/PublicationStatus" }
+        attemptCount: { type: integer, minimum: 0 }
+        nextAttemptAt: { type: [string, "null"], format: date-time }
+        telegramChatId: { type: [string, "null"] }
+        telegramMessageId: { type: [string, "null"] }
+        publishedWithImage: { type: boolean }
+        errorCode: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        publishedAt: { type: [string, "null"], format: date-time }
+    PublicationPage:
+      type: object
+      required: [data, page]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Publication" } }
+        page: { $ref: "#/components/schemas/PageInfo" }
+    CalendarItem:
+      type: object
+      additionalProperties: false
+      required: [publication, post]
+      properties:
+        publication: { $ref: "#/components/schemas/Publication" }
+        post: { $ref: "#/components/schemas/Post" }
+        channel: { $ref: "#/components/schemas/Channel" }
+    SubscriptionSummary:
+      type: object
+      additionalProperties: false
+      required: [planCode, planName, status, entitlements]
+      properties:
+        subscriptionId: { type: [string, "null"], format: uuid }
+        planCode: { type: string }
+        planName: { type: string }
+        status: { type: string, enum: [TRIALING, ACTIVE, PAST_DUE, CANCELLED, EXPIRED] }
+        startsAt: { type: [string, "null"], format: date-time }
+        endsAt: { type: [string, "null"], format: date-time }
+        entitlements: { $ref: "#/components/schemas/Entitlements" }
+    Entitlements:
+      type: object
+      additionalProperties: false
+      required:
+        - channelLimit
+        - topicLimit
+        - textGenerationMonthly
+        - imageGenerationMonthly
+        - moderationRevisionMonthly
+        - imageGenerationEnabled
+        - moderationEnabled
+      properties:
+        channelLimit: { type: [integer, "null"], minimum: 0 }
+        topicLimit: { type: [integer, "null"], minimum: 0 }
+        textGenerationMonthly: { type: [integer, "null"], minimum: 0 }
+        imageGenerationMonthly: { type: [integer, "null"], minimum: 0 }
+        moderationRevisionMonthly: { type: [integer, "null"], minimum: 0 }
+        imageGenerationEnabled: { type: boolean }
+        moderationEnabled: { type: boolean }
+    UsageItem:
+      type: object
+      additionalProperties: false
+      required: [metric, committed, reserved, limit]
+      properties:
+        metric: { type: string, enum: [TEXT_GENERATION, IMAGE_GENERATION, MODERATION_REVISION] }
+        committed: { type: integer, minimum: 0 }
+        reserved: { type: integer, minimum: 0 }
+        limit: { type: [integer, "null"], minimum: 0 }
+    UsageSummary:
+      type: object
+      additionalProperties: false
+      required: [periodStart, periodEnd, items]
+      properties:
+        periodStart: { type: string, format: date-time }
+        periodEnd: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/UsageItem" } }
+    Dashboard:
+      type: object
+      additionalProperties: false
+      required: [channels, topics, pendingModeration, scheduledPublications, recentPublications]
+      properties:
+        channels: { type: integer, minimum: 0 }
+        topics: { type: integer, minimum: 0 }
+        pendingModeration: { type: integer, minimum: 0 }
+        scheduledPublications: { type: integer, minimum: 0 }
+        recentPublications:
+          type: array
+          items: { $ref: "#/components/schemas/Publication" }

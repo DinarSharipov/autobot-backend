@@ -1,0 +1,500 @@
+// Stage 1 proposal only. Stage 2 moves an approved version into prisma/schema.prisma.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum AuthProvider {
+  TELEGRAM
+}
+
+enum ChannelStatus {
+  PENDING
+  ACTIVE
+  INVALID
+  ARCHIVED
+}
+
+enum TopicStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum PublicationMode {
+  AUTO
+  MODERATION
+}
+
+enum PostStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  CANCELLED
+}
+
+enum PostVersionStatus {
+  GENERATION_PENDING
+  GENERATING
+  GENERATED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+  FAILED
+  CANCELLED
+}
+
+enum ScheduleKind {
+  ONCE
+  RECURRING
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum MisfirePolicy {
+  FIRE_ONCE
+  LATEST_ONLY
+  SKIP
+}
+
+enum PublicationStatus {
+  PENDING
+  GENERATING
+  AWAITING_MODERATION
+  READY
+  PUBLISHING
+  RETRY_WAIT
+  PUBLISHED
+  DELIVERY_UNKNOWN
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REVISION_REQUESTED
+  REJECTED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum UsageMetric {
+  TEXT_GENERATION
+  IMAGE_GENERATION
+  MODERATION_REVISION
+}
+
+enum UsageEntryKind {
+  RESERVE
+  COMMIT
+  RELEASE
+  ADJUST
+}
+
+enum AIRequestKind {
+  TEXT
+  IMAGE
+}
+
+enum AIRequestStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum AuditActorType {
+  USER
+  SERVICE
+  SYSTEM
+}
+
+model User {
+  id                  String              @id @default(uuid()) @db.Uuid
+  status              UserStatus          @default(ACTIVE)
+  locale              String              @default("ru")
+  timezone            String              @default("UTC")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deletedAt           DateTime?
+  telegramAccount     TelegramAccount?
+  authIdentities      AuthIdentity[]
+  sessions            Session[]
+  channels            Channel[]
+  topics              Topic[]
+  posts               Post[]
+  subscriptions       Subscription[]
+  usageCounters       UsageCounter[]
+  aiRequests          AIRequest[]
+  moderationDecisions ModerationRequest[] @relation("ModerationDecisionActor")
+  auditEvents         AuditEvent[]
+
+  @@index([status])
+}
+
+model TelegramAccount {
+  id               String         @id @default(uuid()) @db.Uuid
+  userId           String         @unique @db.Uuid
+  telegramUserId   BigInt         @unique
+  username         String?
+  firstName        String?
+  lastName         String?
+  photoUrl         String?
+  profileUpdatedAt DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  authIdentities   AuthIdentity[]
+}
+
+model AuthIdentity {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @db.Uuid
+  telegramAccountId String?         @db.Uuid
+  provider          AuthProvider
+  subject           String
+  createdAt         DateTime        @default(now())
+  lastLoginAt       DateTime?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  telegramAccount   TelegramAccount? @relation(fields: [telegramAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, subject])
+  @@index([userId])
+}
+
+model Session {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  secretHash     String    @unique
+  csrfTokenHash  String
+  userAgentHash  String?
+  ipPrefixHash   String?
+  createdAt      DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  idleExpiresAt  DateTime
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokeReason   String?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model Channel {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  telegramChatId  BigInt        @unique
+  title           String
+  username        String?
+  status          ChannelStatus @default(PENDING)
+  botPermissions  Json?
+  verifiedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?
+  version         Int           @default(1)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  posts           Post[]
+
+  @@index([userId, status])
+}
+
+model Topic {
+  id             String      @id @default(uuid()) @db.Uuid
+  userId         String      @db.Uuid
+  name           String
+  description    String?
+  promptTemplate String
+  status         TopicStatus @default(ACTIVE)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  archivedAt     DateTime?
+  version        Int         @default(1)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  posts          Post[]
+
+  @@unique([userId, name])
+  @@index([userId, status])
+}
+
+model Post {
+  id              String          @id @default(uuid()) @db.Uuid
+  userId          String          @db.Uuid
+  channelId       String          @db.Uuid
+  topicId         String?         @db.Uuid
+  title           String?
+  prompt          String
+  generateImage   Boolean         @default(false)
+  publicationMode PublicationMode
+  status          PostStatus      @default(DRAFT)
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  archivedAt      DateTime?
+  user            User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  channel         Channel         @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  topic           Topic?          @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  versions        PostVersion[]
+  schedules       PostSchedule[]
+  publications    Publication[]
+  aiRequests      AIRequest[]
+  moderation      ModerationRequest[]
+
+  @@index([userId, status, createdAt])
+  @@index([channelId])
+  @@index([topicId])
+}
+
+model PostVersion {
+  id                     String            @id @default(uuid()) @db.Uuid
+  postId                 String            @db.Uuid
+  publicationId          String?           @db.Uuid
+  sourceVersionId        String?           @db.Uuid
+  aiRequestId            String?           @unique @db.Uuid
+  sequence               Int
+  status                 PostVersionStatus @default(GENERATION_PENDING)
+  text                   String?
+  createdAt              DateTime          @default(now())
+  generatedAt            DateTime?
+  approvedAt             DateTime?
+  post                   Post              @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publication            Publication?      @relation("PublicationVersions", fields: [publicationId], references: [id], onDelete: Restrict)
+  sourceVersion          PostVersion?      @relation("VersionRevision", fields: [sourceVersionId], references: [id], onDelete: Restrict)
+  revisions              PostVersion[]     @relation("VersionRevision")
+  aiRequest              AIRequest?        @relation(fields: [aiRequestId], references: [id], onDelete: Restrict)
+  moderationRequest      ModerationRequest?
+  selectedForPublication Publication?      @relation("SelectedPublicationVersion")
+
+  @@unique([postId, sequence])
+  @@index([publicationId, status])
+}
+
+model PostSchedule {
+  id                  String          @id @default(uuid()) @db.Uuid
+  postId              String          @db.Uuid
+  kind                ScheduleKind
+  status              ScheduleStatus  @default(ACTIVE)
+  timezone            String
+  runAt               DateTime?
+  rrule               String?
+  nextRunAt           DateTime?
+  lastEvaluatedAt     DateTime?
+  misfirePolicy       MisfirePolicy
+  misfireGraceSeconds Int
+  version             Int             @default(1)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  cancelledAt         DateTime?
+  post                Post            @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publications        Publication[]
+
+  @@index([status, nextRunAt])
+  @@index([postId])
+}
+
+model Publication {
+  id                       String            @id @default(uuid()) @db.Uuid
+  postId                   String            @db.Uuid
+  scheduleId               String?           @db.Uuid
+  selectedVersionId        String?           @unique @db.Uuid
+  idempotencyKey           String?           @unique
+  scheduledFor             DateTime
+  status                   PublicationStatus @default(PENDING)
+  attemptCount             Int               @default(0)
+  nextAttemptAt            DateTime?
+  telegramChatId           BigInt?
+  telegramMessageId        BigInt?
+  publishedWithImage       Boolean           @default(false)
+  errorCode                String?
+  errorDetails             Json?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  publishedAt              DateTime?
+  post                     Post              @relation(fields: [postId], references: [id], onDelete: Restrict)
+  schedule                 PostSchedule?     @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  versions                 PostVersion[]     @relation("PublicationVersions")
+  selectedVersion          PostVersion?      @relation("SelectedPublicationVersion", fields: [selectedVersionId], references: [id], onDelete: Restrict)
+  moderationRequests       ModerationRequest[]
+  aiRequests               AIRequest[]
+
+  @@unique([scheduleId, scheduledFor])
+  @@unique([telegramChatId, telegramMessageId])
+  @@index([status, nextAttemptAt])
+  @@index([postId, createdAt])
+}
+
+model ModerationRequest {
+  id              String           @id @default(uuid()) @db.Uuid
+  postId          String           @db.Uuid
+  publicationId   String           @db.Uuid
+  versionId       String           @unique @db.Uuid
+  status          ModerationStatus @default(PENDING)
+  feedback        String?
+  decidedByUserId String?          @db.Uuid
+  decidedAt       DateTime?
+  version         Int              @default(1)
+  createdAt       DateTime         @default(now())
+  post            Post             @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publication     Publication      @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  postVersion     PostVersion      @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  decidedBy       User?            @relation("ModerationDecisionActor", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([publicationId, status])
+  @@index([postId, createdAt])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(uuid()) @db.Uuid
+  code          String         @unique
+  name          String
+  entitlements Json
+  isDefault     Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id               String             @id @default(uuid()) @db.Uuid
+  userId           String             @db.Uuid
+  planId           String             @db.Uuid
+  status           SubscriptionStatus
+  startsAt         DateTime
+  endsAt           DateTime?
+  externalProvider String?
+  externalId       String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan             SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, startsAt, endsAt])
+  @@unique([externalProvider, externalId])
+}
+
+model UsageCounter {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @db.Uuid
+  metric        UsageMetric
+  periodStart   DateTime
+  periodEnd     DateTime
+  reserved      Int                @default(0)
+  committed     Int                @default(0)
+  version       Int                @default(1)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  user          User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntries UsageLedgerEntry[]
+
+  @@unique([userId, metric, periodStart])
+  @@index([periodEnd])
+}
+
+model UsageLedgerEntry {
+  id           String         @id @default(uuid()) @db.Uuid
+  counterId    String         @db.Uuid
+  kind         UsageEntryKind
+  amount       Int
+  operationKey String         @unique
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  counter      UsageCounter   @relation(fields: [counterId], references: [id], onDelete: Restrict)
+
+  @@index([counterId, createdAt])
+}
+
+model AIRequest {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @db.Uuid
+  postId            String?         @db.Uuid
+  publicationId     String?         @db.Uuid
+  kind              AIRequestKind
+  provider          String
+  model             String
+  status            AIRequestStatus @default(PENDING)
+  providerRequestId String?
+  inputUnits        Int?
+  outputUnits       Int?
+  costMinor         Int?
+  currency          String?
+  errorCode         String?
+  createdAt         DateTime        @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  post              Post?           @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publication       Publication?    @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  generatedVersion  PostVersion?
+
+  @@index([userId, createdAt])
+  @@index([publicationId, status])
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now())
+  lockedAt      DateTime?
+  processedAt   DateTime?
+  lastErrorCode String?
+  createdAt     DateTime     @default(now())
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId, createdAt])
+}
+
+model AuditEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String?        @db.Uuid
+  actorType  AuditActorType
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  requestId  String?
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+  user       User?          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([userId, createdAt])
+}

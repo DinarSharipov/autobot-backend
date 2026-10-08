@@ -1,0 +1,22 @@
+services:
+  autobot-api:
+    environment:
+      NODE_ENV: development
+      API_PUBLIC_URL: http://localhost:3000
+      TRUST_PROXY_HOPS: 0
+      REDIS_KEY_PREFIX: autobot:development
+      QUEUE_PREFIX: autobot:development
+    ports:
+      - '127.0.0.1:3000:3000'
+
+  autobot-postgres:
+    ports:
+      - '127.0.0.1:5432:5432'
+
+  autobot-redis:
+    ports:
+      - '127.0.0.1:6380:6379'
+
+networks:
+  backend-internal:
+    internal: false

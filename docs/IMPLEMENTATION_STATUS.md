@@ -1,9 +1,15 @@
 # IMPLEMENTATION_STATUS.md
 
 ## Current status
-Repository initialized. Architecture updated to move Web Admin into its own repository and future server.
+
+Stages 1–4 are complete: contracts, backend foundation, identity/access, and core
+domain/entitlements are runtime-verified.
+Live Telegram login still requires deployment credentials and registered BotFather URLs.
+Live channel validation requires the publishing bot token and administrator access to a real
+Telegram channel.
 
 ## Approved architecture
+
 - [x] Backend-only repository
 - [x] Web Admin moved to `DinarSharipov/autobot-web`
 - [x] Web Admin will deploy to a different future server
@@ -22,6 +28,7 @@ Repository initialized. Architecture updated to move Web Admin into its own repo
 - [x] Public HTTPS API required for Web Admin
 
 ## CI/CD
+
 - [x] `SERVER_HOST` configured in GitHub Actions
 - [x] `SERVER_PORT` configured in GitHub Actions
 - [x] `SERVER_USER` configured in GitHub Actions
@@ -30,7 +37,21 @@ Repository initialized. Architecture updated to move Web Admin into its own repo
 - [ ] GitHub Actions workflow implementation
 - [ ] First deployment validation
 
+## Planning and contracts
+
+- [x] Dependency-ordered implementation stages documented
+- [x] Stage 1 contracts and domain design completed
+- [x] Telegram OIDC and browser session architecture accepted
+- [x] Bot HMAC service authentication accepted
+- [x] Domain ER model and Prisma schema proposal created
+- [x] Lifecycle, scheduling, queue, retry, and ephemeral-image semantics documented
+- [x] Local PostgreSQL persistence boundary documented
+- [x] GPT conversations and generated images excluded from database persistence
+- [x] Initial shared OpenAPI contract created and linted
+- [x] Client integration and environment-variable contracts documented
+
 ## Product decisions captured
+
 - [x] Immediate one-time posts
 - [x] Scheduled one-time posts
 - [x] Scheduled recurring posts
@@ -41,26 +62,28 @@ Repository initialized. Architecture updated to move Web Admin into its own repo
 - [x] Shared moderation state between bot and Web Admin
 
 ## Implementation progress
-- [ ] NestJS scaffold
-- [ ] Configuration
-- [ ] Telegram authentication
-- [ ] Session management
-- [ ] CORS/public HTTPS API configuration
-- [ ] Prisma schema
-- [ ] PostgreSQL runtime
-- [ ] Redis runtime
-- [ ] BullMQ queues
-- [ ] Users/AuthIdentity module
-- [ ] Channels module
-- [ ] Topics module
+
+- [x] Contracts/domain design
+- [x] NestJS scaffold
+- [x] Configuration
+- [x] Telegram authentication
+- [x] Session management
+- [x] CORS/public HTTPS API configuration
+- [x] Prisma schema
+- [x] PostgreSQL runtime
+- [x] Redis runtime
+- [x] BullMQ queues
+- [x] Users/AuthIdentity module
+- [x] Channels module
+- [x] Topics module
 - [ ] Posts/versioning module
 - [ ] Moderation module
 - [ ] Scheduling module
 - [ ] Publishing module
 - [ ] AI adapters
-- [ ] Subscription/usage module
+- [x] Subscription/usage module
 - [ ] Telegram publisher
-- [ ] Docker Compose
-- [ ] Health checks
+- [x] Docker Compose
+- [x] Health checks
 - [ ] CI/CD workflow
-- [ ] Automated tests
+- [x] Automated tests

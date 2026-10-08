@@ -1,0 +1,114 @@
+services:
+  autobot-api:
+    container_name: autobot-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-https://api.example.invalid}
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      BUILD_SHA: ${BUILD_SHA:-development}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      WEB_ALLOWED_RETURN_URLS: ${WEB_ALLOWED_RETURN_URLS:-}
+      DATABASE_URL: postgresql://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:-autobot}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot}?schema=public&connect_timeout=5
+      REDIS_URL: redis://autobot-redis:6379/0
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-autobot:production}
+      QUEUE_PREFIX: ${QUEUE_PREFIX:-autobot:production}
+      IMAGE_TEMP_DIR: /tmp/autobot-images
+      TELEGRAM_OIDC_ISSUER: ${TELEGRAM_OIDC_ISSUER:-https://oauth.telegram.org}
+      TELEGRAM_OIDC_CLIENT_ID: ${TELEGRAM_OIDC_CLIENT_ID:-}
+      TELEGRAM_OIDC_CLIENT_SECRET: ${TELEGRAM_OIDC_CLIENT_SECRET:-}
+      TELEGRAM_OIDC_REDIRECT_URI: ${TELEGRAM_OIDC_REDIRECT_URI:-}
+      TELEGRAM_OIDC_SCOPES: ${TELEGRAM_OIDC_SCOPES:-openid profile}
+      OIDC_FLOW_TTL_SECONDS: ${OIDC_FLOW_TTL_SECONDS:-600}
+      OIDC_REQUEST_TIMEOUT_MS: ${OIDC_REQUEST_TIMEOUT_MS:-10000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_API_BASE_URL: ${TELEGRAM_API_BASE_URL:-https://api.telegram.org}
+      TELEGRAM_API_TIMEOUT_MS: ${TELEGRAM_API_TIMEOUT_MS:-10000}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-__Host-autobot_session}
+      SESSION_ABSOLUTE_TTL_SECONDS: ${SESSION_ABSOLUTE_TTL_SECONDS:-2592000}
+      SESSION_IDLE_TTL_SECONDS: ${SESSION_IDLE_TTL_SECONDS:-604800}
+      SESSION_COOKIE_SAME_SITE: ${SESSION_COOKIE_SAME_SITE:-lax}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      BOT_SERVICE_ACTIVE_KEY_ID: ${BOT_SERVICE_ACTIVE_KEY_ID:-}
+      BOT_SERVICE_ACTIVE_SECRET: ${BOT_SERVICE_ACTIVE_SECRET:-}
+      BOT_SERVICE_PREVIOUS_KEY_ID: ${BOT_SERVICE_PREVIOUS_KEY_ID:-}
+      BOT_SERVICE_PREVIOUS_SECRET: ${BOT_SERVICE_PREVIOUS_SECRET:-}
+      BOT_SERVICE_CLOCK_SKEW_SECONDS: ${BOT_SERVICE_CLOCK_SKEW_SECONDS:-60}
+      BOT_SERVICE_NONCE_TTL_SECONDS: ${BOT_SERVICE_NONCE_TTL_SECONDS:-300}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+    depends_on:
+      autobot-postgres:
+        condition: service_healthy
+      autobot-redis:
+        condition: service_healthy
+    networks:
+      - autobot-shared
+      - backend-internal
+    tmpfs:
+      - /tmp/autobot-images:mode=0700,uid=100,gid=101,size=536870912
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  autobot-postgres:
+    container_name: autobot-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${AUTOBOT_DB_USER:-autobot}
+      POSTGRES_PASSWORD: ${AUTOBOT_DB_PASSWORD:-autobot}
+      POSTGRES_DB: ${AUTOBOT_DB_NAME:-autobot}
+    volumes:
+      - autobot-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - backend-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  autobot-redis:
+    container_name: autobot-redis
+    image: redis:8-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - autobot-redis-data:/data
+    networks:
+      - backend-internal
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  autobot-shared:
+    external: true
+    name: autobot-shared
+  backend-internal:
+    name: autobot-backend-internal
+    internal: true
+
+volumes:
+  autobot-postgres-data:
+    name: autobot-postgres-data
+  autobot-redis-data:
+    name: autobot-redis-data

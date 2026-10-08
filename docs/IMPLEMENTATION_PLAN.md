@@ -1,153 +1,43 @@
 # IMPLEMENTATION_PLAN.md
 
 ## Goal
-Build the central NestJS backend for Autobot with durable persistence, queue-based scheduling, Telegram authentication, and one REST API shared by the grammY bot and the separately deployed Web Admin.
 
-## Planned implementation
+Build the central NestJS backend for Autobot with durable persistence, queue-based generation and publication, Telegram authentication, and one REST API shared by the grammY bot and the separately deployed Web Admin.
 
-### 1. Backend bootstrap
-- Initialize NestJS + TypeScript.
-- Add configuration/environment validation.
-- Add Prisma.
-- Add PostgreSQL.
-- Add Redis.
-- Add BullMQ.
-- Add structured logging, health checks, and error handling.
-- Expose REST API for grammY and Web Admin clients.
+This repository remains backend-only. The grammY client is developed in `DinarSharipov/autobot`; the React Web Admin is developed and deployed from `DinarSharipov/autobot-web`.
 
-### 2. Authentication
-Implement Telegram-based Web Admin authentication.
+## Delivery strategy
 
-Requirements:
-- validate Telegram login identity on the backend
-- introduce `AuthIdentity` with provider `TELEGRAM`
-- map bot and browser identity to the same `User`
-- create secure browser session
-- use HttpOnly + Secure cookies
-- configure SameSite policy from final production domain topology
-- no bearer-token persistence in browser localStorage
-- no email/password auth in MVP
-- no alternative identity providers in MVP
+Implementation is split into dependency-ordered stages. Each stage has its own detailed plan under [`implementation-plans`](./implementation-plans/README.md).
 
-### 3. Public Web API boundary
-Because `autobot-web` will run on another server:
-- expose required API routes through HTTPS
-- configure explicit Web Admin origin allowlist
-- support credentialed CORS only for trusted origins
-- do not expose PostgreSQL or Redis
-- do not rely on `autobot-shared` for browser/Web Admin traffic
-- keep internal bot traffic on Docker DNS
+| Stage | Plan                                                                                                          | Outcome                                                                                    |
+| ----- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1     | [Contracts and domain design](./implementation-plans/01-contracts-and-domain/IMPLEMENTATION_PLAN.md)          | Approved API, identity, state, scheduling, and data contracts                              |
+| 2     | [Backend foundation](./implementation-plans/02-backend-foundation/IMPLEMENTATION_PLAN.md)                     | Runnable NestJS service with PostgreSQL, Redis, BullMQ, Docker, and baseline observability |
+| 3     | [Identity and access](./implementation-plans/03-identity-and-access/IMPLEMENTATION_PLAN.md)                   | Unified Telegram identity, browser sessions, bot service authentication, and protected API |
+| 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, subscriptions, and centralized usage enforcement                         |
+| 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Generation, versioning, moderation, scheduling, and idempotent Telegram publication        |
+| 6     | [Production readiness](./implementation-plans/06-production-readiness/IMPLEMENTATION_PLAN.md)                 | Tested CI/CD, secure deployment, monitoring, backup, and operational runbooks              |
 
-### 4. Domain modules
-Implement:
-- auth
-- users / Telegram identities
-- channels
-- topics
-- posts
-- post versions
-- moderation
-- generation
-- publishing
-- schedules
-- subscriptions
-- usage/limits
+## Sequencing rules
 
-### 5. Prisma schema
-Start with:
-- User
-- AuthIdentity
-- TelegramAccount
-- Session
-- Channel
-- Topic
-- Post
-- PostVersion
-- PostSchedule
-- Publication
-- ModerationRequest
-- Subscription
-- SubscriptionPlan
-- Usage
-- AIRequest
+- Do not freeze the Prisma schema or public DTOs before Stage 1 decisions are approved.
+- Keep the API independent from grammY and Web Admin implementation details.
+- Treat PostgreSQL as the source of truth; Redis and BullMQ are execution and coordination infrastructure.
+- Persist only user/domain data; keep GPT conversations and generated images out of PostgreSQL.
+- Use local ephemeral image files only inside publication processing and delete them deterministically.
+- Keep public browser traffic on HTTPS and internal bot traffic on Docker DNS.
+- Deliver and test each domain capability through the REST boundary before starting the next dependent capability.
+- Keep queue processors separable from the API so they can move to an `autobot-worker` container later.
 
-Keep Post, PostVersion, Publication, and Schedule separate.
+## Global definition of done
 
-### 6. Post lifecycle
-Support:
-- immediate one-time publication
-- scheduled one-time publication
-- scheduled recurring publication
-- AUTO publishing
-- MODERATION publishing
-- multiple revised post versions
+A stage is complete only when:
 
-The same persisted state must be available from both grammY and Web Admin.
-
-### 7. AI integration
-- Text generation behind provider adapter.
-- Image generation behind provider adapter.
-- Persist accounting/usage.
-- Enforce entitlements before costly operations.
-
-### 8. Subscription and limits
-Centralize policy in:
-- `EntitlementService`
-- `UsageService`
-
-Enforce at least:
-- channel count
-- topic count
-- moderation/revision quota
-- image-generation access/quota
-
-### 9. Redis/BullMQ
-Queues/jobs:
-- GeneratePost
-- GenerateImage
-- PublishPost
-- ScheduledPublish
-- RecurringPublish
-- RetryPublication
-
-Jobs should be restart-safe and idempotent where possible.
-
-Initially workers may run inside `autobot-api`; keep processors separable for future `autobot-worker`.
-
-### 10. Telegram publishing
-- Backend publishes scheduled/automatic posts directly through Telegram Bot API.
-- Do not route background publishing through grammY.
-- Encapsulate Telegram API behind a publisher adapter.
-
-### 11. Docker networking
-Create:
-- external network `autobot-shared`
-- internal network `backend-internal`
-
-Attach:
-- API -> both networks
-- PostgreSQL -> `backend-internal`
-- Redis -> `backend-internal`
-
-API network alias:
-```
-autobot-api
-```
-
-Web Admin runs on another server and is not part of this Compose project.
-
-### 12. CI/CD
-GitHub Actions deployment secrets for the current backend server:
-- `SERVER_HOST`
-- `SERVER_PORT`
-- `SERVER_USER`
-- `SERVER_SSH_KEY`
-- `SERVER_KNOWN_HOSTS`
-
-Pipeline goals:
-- lint/test/build on push/PR
-- Prisma validation/migration checks
-- build backend Docker image
-- deploy/restart backend services safely
-- preserve PostgreSQL/Redis volumes
-- do not deploy `autobot-web` from this repository
+- its documented deliverables exist and unresolved decisions are recorded;
+- lint, type checking, tests, and production build pass;
+- database changes have migrations and rollback/compatibility notes;
+- API changes are represented in OpenAPI and verified by contract tests;
+- authorization, ownership, idempotency, and failure paths are covered where applicable;
+- operational configuration is documented without committing secrets;
+- `IMPLEMENTATION_STATUS.md` is updated with verified progress.
