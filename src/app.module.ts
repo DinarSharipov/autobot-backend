@@ -21,6 +21,7 @@ import { QueueModule } from './infrastructure/queue/queue.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TopicsModule } from './topics/topics.module.js';
+import { PublishingModule } from './publishing/publishing.module.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { TopicsModule } from './topics/topics.module.js';
     ModerationModule,
     GenerationModule,
     SchedulesModule,
+    PublishingModule,
     HealthModule,
   ],
   controllers: [AppController],

@@ -11,7 +11,9 @@ and revision requests now use optimistic versions, idempotent commands, immutabl
 versions, and durable generation dispatch. One-time and recurring scheduling now persist UTC
 occurrences, validate a supported RRULE subset, preserve local wall-clock time across DST, and
 reconcile missed occurrences transactionally; live provider execution still requires an API
-account with available quota. Telegram delivery remains the following slice.
+account with available quota. Text-only Telegram delivery now has a durable publisher,
+retry/backoff, ambiguous-delivery protection, and publication history/retry/cancel endpoints;
+ephemeral image generation remains the next publication slice.
 Telegram OIDC activation and browser sessions are intentionally deferred until the core Telegram
 bot workflow is complete. Bot-only production runs without OIDC credentials; browser login
 endpoints remain implemented but return `503 TELEGRAM_OIDC_NOT_CONFIGURED` until the final Web
@@ -87,10 +89,10 @@ Telegram channel.
 - [x] Posts/versioning module (post definitions, immediate occurrence and version-history read API)
 - [x] Moderation module (approval, rejection, revision, shared queue state)
 - [x] Scheduling module (one-time/recurring RRULE schedules, pause/resume/cancel, durable materialization and reconciliation)
-- [ ] Publishing module
+- [x] Publishing module (text-only delivery, durable retry state, publication history)
 - [ ] AI adapters
 - [x] Subscription/usage module
-- [ ] Telegram publisher
+- [x] Telegram publisher (text-only; image delivery remains)
 - [x] Docker Compose
 - [x] Health checks
 - [x] CI/CD workflow

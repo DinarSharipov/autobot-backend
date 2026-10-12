@@ -60,7 +60,11 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
       data: { status: 'PROCESSING', lockedAt: new Date(), attempts: { increment: 1 } },
     });
     if (!claimed.count) return;
-    const event = await this.prisma.outboxEvent.findUniqueOrThrow({ where: { id: eventId } });
+    // A test reset or an operator cleanup can remove a claimed event between the
+    // atomic claim and this read. Treat that as already handled instead of
+    // leaking an unhandled rejection from the polling loop.
+    const event = await this.prisma.outboxEvent.findUnique({ where: { id: eventId } });
+    if (!event) return;
     const payload = event.payload as { schemaVersion?: unknown; publicationId?: unknown };
     if (payload.schemaVersion !== 1 || typeof payload.publicationId !== 'string') {
       await this.prisma.outboxEvent.updateMany({
