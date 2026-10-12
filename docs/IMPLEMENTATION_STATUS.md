@@ -84,7 +84,7 @@ Telegram channel.
 - [x] Topics module
 - [x] Posts/versioning module (post definitions, immediate occurrence and version-history read API)
 - [x] Moderation module (approval, rejection, revision, shared queue state)
-- [ ] Scheduling module
+- [x] Scheduling module (one-time schedules, pause/resume/cancel, durable materialization)
 - [ ] Publishing module
 - [ ] AI adapters
 - [x] Subscription/usage module

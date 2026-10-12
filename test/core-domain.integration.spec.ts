@@ -21,6 +21,7 @@ import { UsageService } from '../src/subscriptions/usage.service.js';
 import { IdentityService } from '../src/users/identity.service.js';
 import { GenerationService } from '../src/generation/generation.service.js';
 import { TextGenerationAdapter } from '../src/generation/text-generation.adapter.js';
+import { SchedulesService } from '../src/schedules/schedules.service.js';
 import { cleanTestDatabase } from './support/test-database.js';
 
 const BOT_SECRET = 'test-secret-32-bytes-long-1234567890';
@@ -110,6 +111,7 @@ describe('core domain and entitlements', () => {
   let telegram: FakeTelegramChannelAdapter;
   let generation: GenerationService;
   let textGeneration: FakeTextGenerationAdapter;
+  let schedules: SchedulesService;
 
   beforeAll(async () => {
     telegram = new FakeTelegramChannelAdapter();
@@ -128,6 +130,7 @@ describe('core domain and entitlements', () => {
     plans = app.get(PlanProvisioningService);
     usage = app.get(UsageService);
     generation = app.get(GenerationService);
+    schedules = app.get(SchedulesService);
   });
 
   beforeEach(async () => {
@@ -598,6 +601,60 @@ describe('core domain and entitlements', () => {
     expect((rejected.body as { data: { id: string; status: string } }).data).toMatchObject({
       id: secondPublicationId,
       status: 'CANCELLED',
+    });
+  });
+
+  it('materializes one-time schedules exactly once and applies skip misfires', async () => {
+    await user('9001');
+    const channel = await postAs('9001', '/api/v1/channels', { telegramChatId: '-100901' }).expect(
+      201,
+    );
+    const channelId = (channel.body as { data: { id: string } }).data.id;
+    const post = await postAs('9001', '/api/v1/posts', {
+      channelId,
+      prompt: 'Scheduled update',
+      publicationMode: 'AUTO',
+    }).expect(201);
+    const postId = (post.body as { data: { id: string } }).data.id;
+    const runAt = new Date(Date.now() - 60_000).toISOString();
+    const scheduled = await postAs('9001', '/api/v1/schedules', {
+      postId,
+      kind: 'ONCE',
+      timezone: 'UTC',
+      runAt,
+      misfirePolicy: 'FIRE_ONCE',
+      misfireGraceSeconds: 0,
+    }).expect(201);
+    const scheduleId = (scheduled.body as { data: { id: string; status: string } }).data.id;
+    expect((scheduled.body as { data: { status: string } }).data.status).toBe('ACTIVE');
+
+    expect(await schedules.materializeDue(new Date())).toBe(1);
+    expect(await schedules.materializeDue(new Date())).toBe(0);
+    const publication = await prisma.publication.findFirstOrThrow({ where: { scheduleId } });
+    expect(publication.status).toBe('PENDING');
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: publication.id } })).toBe(1);
+
+    const skippedPost = await postAs('9001', '/api/v1/posts', {
+      channelId,
+      prompt: 'Skipped update',
+      publicationMode: 'AUTO',
+    }).expect(201);
+    const skippedPostId = (skippedPost.body as { data: { id: string } }).data.id;
+    const skipped = await postAs('9001', '/api/v1/schedules', {
+      postId: skippedPostId,
+      kind: 'ONCE',
+      timezone: 'UTC',
+      runAt: new Date(Date.now() - 120_000).toISOString(),
+      misfirePolicy: 'SKIP',
+      misfireGraceSeconds: 1,
+    }).expect(201);
+    const skippedScheduleId = (skipped.body as { data: { id: string } }).data.id;
+    expect(await schedules.materializeDue(new Date())).toBe(1);
+    expect(
+      await prisma.publication.findFirstOrThrow({ where: { scheduleId: skippedScheduleId } }),
+    ).toMatchObject({
+      status: 'SKIPPED',
+      errorCode: 'MISSED_SCHEDULE',
     });
   });
 });

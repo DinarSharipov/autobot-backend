@@ -15,6 +15,7 @@ import { ChannelsModule } from './channels/channels.module.js';
 import { ImageTempModule } from './infrastructure/image-temp/image-temp.module.js';
 import { PostsModule } from './posts/posts.module.js';
 import { ModerationModule } from './moderation/moderation.module.js';
+import { SchedulesModule } from './schedules/schedules.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { QueueModule } from './infrastructure/queue/queue.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
@@ -41,6 +42,7 @@ import { TopicsModule } from './topics/topics.module.js';
     PostsModule,
     ModerationModule,
     GenerationModule,
+    SchedulesModule,
     HealthModule,
   ],
   controllers: [AppController],
