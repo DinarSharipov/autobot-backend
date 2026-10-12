@@ -34,7 +34,7 @@ Telegram channel.
 - [x] `SERVER_USER` configured in GitHub Actions
 - [x] Dedicated `SERVER_SSH_KEY` configured
 - [x] `SERVER_KNOWN_HOSTS` configured
-- [ ] GitHub Actions workflow implementation
+- [x] GitHub Actions workflow implementation
 - [ ] First deployment validation
 
 ## Planning and contracts
@@ -85,5 +85,5 @@ Telegram channel.
 - [ ] Telegram publisher
 - [x] Docker Compose
 - [x] Health checks
-- [ ] CI/CD workflow
+- [x] CI/CD workflow
 - [x] Automated tests

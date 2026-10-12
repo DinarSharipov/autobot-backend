@@ -9,6 +9,14 @@ export default tseslint.config(
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  {
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: globals.node,
+    },
+  },
   prettier,
   {
     files: ['**/*.ts'],

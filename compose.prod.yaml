@@ -1,0 +1,19 @@
+services:
+  autobot-api:
+    image: ${AUTOBOT_API_IMAGE:?AUTOBOT_API_IMAGE is required}
+    pull_policy: always
+    environment:
+      DATABASE_URL: ${AUTOBOT_DATABASE_URL:?AUTOBOT_DATABASE_URL is required}
+
+  autobot-migrate:
+    image: ${AUTOBOT_MIGRATION_IMAGE:?AUTOBOT_MIGRATION_IMAGE is required}
+    pull_policy: always
+    profiles: [deploy]
+    environment:
+      DATABASE_URL: ${AUTOBOT_DATABASE_URL:?AUTOBOT_DATABASE_URL is required}
+    depends_on:
+      autobot-postgres:
+        condition: service_healthy
+    networks:
+      - backend-internal
+    restart: 'no'

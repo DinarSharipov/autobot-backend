@@ -1,0 +1,226 @@
+name: Backend CI/CD
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.11.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Validate Prisma schema
+        run: npm run prisma:validate
+
+      - name: Validate OpenAPI
+        run: npm run openapi:lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: autobot
+          POSTGRES_PASSWORD: autobot
+          POSTGRES_DB: autobot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U autobot -d autobot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.11.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply test migrations
+        env:
+          DATABASE_URL: postgresql://autobot:autobot@localhost:5432/autobot_test?schema=public&connect_timeout=5
+        run: npm run prisma:migrate:deploy
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  containers:
+    name: Build and publish containers
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    needs: [quality, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api-image: ${{ steps.images.outputs.api-image }}
+      migration-image: ${{ steps.images.outputs.migration-image }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set image names
+        id: images
+        shell: bash
+        run: |
+          echo "api-image=ghcr.io/dinarsharipov/autobot-backend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "migration-image=ghcr.io/dinarsharipov/autobot-backend-migration:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.images.outputs.api-image }}
+            ghcr.io/dinarsharipov/autobot-backend:dev
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and publish migration image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: migration
+          push: true
+          tags: |
+            ${{ steps.images.outputs.migration-image }}
+            ghcr.io/dinarsharipov/autobot-backend-migration:dev
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=migration
+          cache-to: type=gha,mode=max,scope=migration
+
+  deploy:
+    name: Deploy backend to production
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    needs: [containers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.API_PUBLIC_URL }}
+    concurrency:
+      group: production-backend
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+      GHCR_USER: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AUTOBOT_API_IMAGE: ${{ needs.containers.outputs.api-image }}
+      AUTOBOT_MIGRATION_IMAGE: ${{ needs.containers.outputs.migration-image }}
+      BUILD_SHA: ${{ github.sha }}
+      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
+      CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+      WEB_ALLOWED_RETURN_URLS: ${{ vars.WEB_ALLOWED_RETURN_URLS }}
+      AUTOBOT_DB_USER: ${{ vars.AUTOBOT_DB_USER }}
+      AUTOBOT_DB_PASSWORD: ${{ secrets.AUTOBOT_DB_PASSWORD }}
+      AUTOBOT_DB_NAME: ${{ vars.AUTOBOT_DB_NAME }}
+      REDIS_KEY_PREFIX: ${{ vars.REDIS_KEY_PREFIX }}
+      QUEUE_PREFIX: ${{ vars.QUEUE_PREFIX }}
+      TELEGRAM_OIDC_ISSUER: ${{ vars.TELEGRAM_OIDC_ISSUER }}
+      TELEGRAM_OIDC_CLIENT_ID: ${{ vars.TELEGRAM_OIDC_CLIENT_ID }}
+      TELEGRAM_OIDC_CLIENT_SECRET: ${{ secrets.TELEGRAM_OIDC_CLIENT_SECRET }}
+      TELEGRAM_OIDC_REDIRECT_URI: ${{ vars.TELEGRAM_OIDC_REDIRECT_URI }}
+      TELEGRAM_OIDC_SCOPES: ${{ vars.TELEGRAM_OIDC_SCOPES }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      BOT_SERVICE_ACTIVE_KEY_ID: ${{ vars.BOT_SERVICE_ACTIVE_KEY_ID }}
+      BOT_SERVICE_ACTIVE_SECRET: ${{ secrets.BOT_SERVICE_ACTIVE_SECRET }}
+      SESSION_COOKIE_SAME_SITE: ${{ vars.SESSION_COOKIE_SAME_SITE }}
+      PRODUCTION_ENV_FILE: /tmp/autobot-backend.env
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate and render production environment
+        run: node scripts/ci/render-production-env.mjs "$PRODUCTION_ENV_FILE"
+
+      - name: Install password SSH fallback
+        if: env.SERVER_SSH_KEY == '' && env.SERVER_PASSWORD != ''
+        run: sudo apt-get update && sudo apt-get install --yes sshpass
+
+      - name: Deploy immutable images
+        run: bash scripts/ci/deploy-over-ssh.sh
