@@ -47,6 +47,7 @@ trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 for _ in $(seq 1 30); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' autobot-api 2>/dev/null || true)"
   if [[ "$health" == 'healthy' ]]; then
+    "${compose[@]}" up -d --no-build autobot-proxy
     "${compose[@]}" ps
     exit 0
   fi

@@ -72,6 +72,7 @@ deploy_root='/opt/autobot/backend'
 "${scp_prefix[@]}" scp "${scp_options[@]}" \
   compose.yaml \
   compose.prod.yaml \
+  Caddyfile \
   scripts/deploy/backend-deploy.sh \
   "$remote:$deploy_root/"
 

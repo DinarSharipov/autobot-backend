@@ -8,6 +8,8 @@ The backend and grammY bot are independent Compose projects on the same host:
 - bot project: `autobot-bot` in `/opt/autobot/bot`;
 - shared external Docker network: `autobot-shared`;
 - bot backend URL: `http://autobot-api:3000`;
+- public Swagger UI: `${API_PUBLIC_URL}/api/docs`;
+- public OpenAPI JSON: `${API_PUBLIC_URL}/api/docs-json`;
 - backend-only internal network: `autobot-backend-internal`;
 - PostgreSQL and Redis have no public ports in production.
 
@@ -28,18 +30,23 @@ Environment secrets:
 - `SERVER_KNOWN_HOSTS`
 - `SERVER_SSH_KEY` (preferred) or `SERVER_PASSWORD` (fallback)
 - `AUTOBOT_DB_PASSWORD`
-- `TELEGRAM_OIDC_CLIENT_SECRET`
 - `TELEGRAM_BOT_TOKEN`
 - `BOT_SERVICE_ACTIVE_SECRET`
 
 Environment variables:
 
 - `API_PUBLIC_URL`
-- `CORS_ALLOWED_ORIGINS`
-- `WEB_ALLOWED_RETURN_URLS`
-- `TELEGRAM_OIDC_CLIENT_ID`
-- `TELEGRAM_OIDC_REDIRECT_URI`
 - `BOT_SERVICE_ACTIVE_KEY_ID`
+
+Deferred until the final Web Admin stage:
+
+- secret `TELEGRAM_OIDC_CLIENT_SECRET`;
+- variables `CORS_ALLOWED_ORIGINS`, `WEB_ALLOWED_RETURN_URLS`,
+  `TELEGRAM_OIDC_CLIENT_ID`, and `TELEGRAM_OIDC_REDIRECT_URI`.
+
+Leave all OIDC values empty for the current bot-only deployment. Browser authentication endpoints
+then fail closed with `503 TELEGRAM_OIDC_NOT_CONFIGURED`; bot HMAC authentication and the domain API
+remain available.
 
 Optional variables with safe defaults:
 
@@ -71,8 +78,8 @@ immutable images, starts PostgreSQL and Redis, runs `prisma migrate deploy`, upd
 
 ## First deployment prerequisites
 
-- Public HTTPS routing for `API_PUBLIC_URL` must already terminate TLS and forward to the API.
-- Telegram OIDC URLs must be registered with BotFather.
+- Public HTTPS routing for `API_PUBLIC_URL` is provided by the `autobot-proxy` Caddy service.
+- Telegram OIDC URLs are registered with BotFather only during the final Web Admin stage.
 - The publishing bot must have the required permissions in target channels.
 - The GHCR package must inherit access from this repository so the workflow token can pull it.
 - Keep a verified PostgreSQL backup before applying non-trivial production migrations.

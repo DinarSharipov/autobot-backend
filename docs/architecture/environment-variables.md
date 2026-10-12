@@ -27,20 +27,20 @@ All variables are validated at process startup. Required production secrets have
 
 ## Telegram OIDC and sessions
 
-| Variable                       | Required   | Secret | Purpose                                       |
-| ------------------------------ | ---------- | ------ | --------------------------------------------- |
-| `TELEGRAM_OIDC_ISSUER`         | yes        | no     | Expected issuer; `https://oauth.telegram.org` |
-| `TELEGRAM_OIDC_CLIENT_ID`      | yes        | no     | Client ID provided by BotFather               |
-| `TELEGRAM_OIDC_CLIENT_SECRET`  | yes        | yes    | OIDC code-exchange secret                     |
-| `TELEGRAM_OIDC_REDIRECT_URI`   | yes        | no     | Registered backend callback URL               |
-| `TELEGRAM_OIDC_SCOPES`         | yes        | no     | MVP value `openid profile`                    |
-| `OIDC_FLOW_TTL_SECONDS`        | no         | no     | State/PKCE record TTL; default 600            |
-| `OIDC_REQUEST_TIMEOUT_MS`      | no         | no     | Telegram token/JWKS request timeout           |
-| `SESSION_COOKIE_NAME`          | no         | no     | Default `__Host-autobot_session`              |
-| `SESSION_ABSOLUTE_TTL_SECONDS` | no         | no     | Default 2592000 (30 days)                     |
-| `SESSION_IDLE_TTL_SECONDS`     | no         | no     | Default 604800 (7 days)                       |
-| `SESSION_COOKIE_SAME_SITE`     | production | no     | `lax` or `none` from deployed topology        |
-| `SESSION_COOKIE_SECURE`        | production | no     | Must be `true` in production                  |
+| Variable                       | Required              | Secret | Purpose                                       |
+| ------------------------------ | --------------------- | ------ | --------------------------------------------- |
+| `TELEGRAM_OIDC_ISSUER`         | yes                   | no     | Expected issuer; `https://oauth.telegram.org` |
+| `TELEGRAM_OIDC_CLIENT_ID`      | final Web Admin stage | no     | Client ID provided by BotFather               |
+| `TELEGRAM_OIDC_CLIENT_SECRET`  | final Web Admin stage | yes    | OIDC code-exchange secret                     |
+| `TELEGRAM_OIDC_REDIRECT_URI`   | final Web Admin stage | no     | Registered backend callback URL               |
+| `TELEGRAM_OIDC_SCOPES`         | yes                   | no     | MVP value `openid profile`                    |
+| `OIDC_FLOW_TTL_SECONDS`        | no                    | no     | State/PKCE record TTL; default 600            |
+| `OIDC_REQUEST_TIMEOUT_MS`      | no                    | no     | Telegram token/JWKS request timeout           |
+| `SESSION_COOKIE_NAME`          | no                    | no     | Default `__Host-autobot_session`              |
+| `SESSION_ABSOLUTE_TTL_SECONDS` | no                    | no     | Default 2592000 (30 days)                     |
+| `SESSION_IDLE_TTL_SECONDS`     | no                    | no     | Default 604800 (7 days)                       |
+| `SESSION_COOKIE_SAME_SITE`     | production            | no     | `lax` or `none` from deployed topology        |
+| `SESSION_COOKIE_SECURE`        | production            | no     | Must be `true` in production                  |
 
 `SESSION_COOKIE_DOMAIN` is intentionally absent. The approved `__Host-` cookie is host-only and must not have a Domain attribute.
 

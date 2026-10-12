@@ -18,6 +18,7 @@ Implementation is split into dependency-ordered stages. Each stage has its own d
 | 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, subscriptions, and centralized usage enforcement                         |
 | 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Generation, versioning, moderation, scheduling, and idempotent Telegram publication        |
 | 6     | [Production readiness](./implementation-plans/06-production-readiness/IMPLEMENTATION_PLAN.md)                 | Tested CI/CD, secure deployment, monitoring, backup, and operational runbooks              |
+| 7     | Final Web Admin activation                                                                                    | Register Telegram OIDC URLs, configure browser login, CORS, cookies, and live verification |
 
 ## Sequencing rules
 
@@ -29,6 +30,8 @@ Implementation is split into dependency-ordered stages. Each stage has its own d
 - Keep public browser traffic on HTTPS and internal bot traffic on Docker DNS.
 - Deliver and test each domain capability through the REST boundary before starting the next dependent capability.
 - Keep queue processors separable from the API so they can move to an `autobot-worker` container later.
+- Keep Telegram OIDC credentials optional in bot-only production. Activate and live-test browser
+  login only after the core Telegram bot functionality is complete.
 
 ## Global definition of done
 

@@ -69,6 +69,19 @@ describe('validateEnvironment', () => {
     ).toThrow('must be configured together');
   });
 
+  it('allows production bot-only mode without browser OIDC', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        API_PUBLIC_URL: 'https://api.example.com',
+        TELEGRAM_BOT_TOKEN: 'telegram-token',
+        BOT_SERVICE_ACTIVE_KEY_ID: 'bot-v1',
+        BOT_SERVICE_ACTIVE_SECRET: 'a'.repeat(32),
+      }),
+    ).not.toThrow();
+  });
+
   it('requires secure cookies for SameSite=None', () => {
     expect(() =>
       validateEnvironment({

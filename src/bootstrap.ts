@@ -104,8 +104,12 @@ export function configureApplication(
   if (options.swagger !== false) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Autobot Backend API')
-      .setDescription('Central REST API for the Autobot Telegram bot and Web Admin.')
+      .setDescription(
+        'Central REST API for the Autobot Telegram bot. Web Admin and Telegram OIDC activation are deferred until the core bot workflow is complete.',
+      )
       .setVersion('0.1.0')
+      .addServer(config.get('API_PUBLIC_URL', { infer: true }), 'Public HTTPS endpoint')
+      .addServer('http://autobot-api:3000', 'Internal Docker endpoint for autobot-bot')
       .addCookieAuth('__Host-autobot_session', { type: 'apiKey', in: 'cookie' }, 'cookieSession')
       .addApiKey({ type: 'apiKey', in: 'header', name: 'X-Autobot-Signature' }, 'botSignature')
       .build();

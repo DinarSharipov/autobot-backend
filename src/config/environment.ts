@@ -235,14 +235,6 @@ const environmentSchema = z
     }
 
     if (environment.NODE_ENV === 'production') {
-      if (!oidcConfigured) {
-        context.addIssue({
-          code: 'custom',
-          path: ['TELEGRAM_OIDC_CLIENT_ID'],
-          message: 'Telegram OIDC configuration is required in production',
-        });
-      }
-
       if (!environment.BOT_SERVICE_ACTIVE_KEY_ID || !environment.BOT_SERVICE_ACTIVE_SECRET) {
         context.addIssue({
           code: 'custom',

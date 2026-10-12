@@ -1,4 +1,24 @@
 services:
+  autobot-proxy:
+    container_name: autobot-proxy
+    image: caddy:2.10.2-alpine
+    environment:
+      API_HOST: ${API_HOST:?API_HOST is required}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - autobot-caddy-data:/data
+      - autobot-caddy-config:/config
+    depends_on:
+      autobot-api:
+        condition: service_healthy
+    networks:
+      - autobot-shared
+    restart: unless-stopped
+
   autobot-api:
     container_name: autobot-api
     build:
@@ -107,6 +127,10 @@ networks:
     internal: true
 
 volumes:
+  autobot-caddy-data:
+    name: autobot-caddy-data
+  autobot-caddy-config:
+    name: autobot-caddy-config
   autobot-postgres-data:
     name: autobot-postgres-data
   autobot-redis-data:

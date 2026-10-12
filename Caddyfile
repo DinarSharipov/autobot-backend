@@ -1,0 +1,4 @@
+{$API_HOST} {
+  encode zstd gzip
+  reverse_proxy autobot-api:3000
+}

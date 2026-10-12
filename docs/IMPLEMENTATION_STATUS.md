@@ -2,9 +2,12 @@
 
 ## Current status
 
-Stages 1–4 are complete: contracts, backend foundation, identity/access, and core
+Stages 1–4 are complete: contracts, backend foundation, bot service access, and core
 domain/entitlements are runtime-verified.
-Live Telegram login still requires deployment credentials and registered BotFather URLs.
+Telegram OIDC activation and browser sessions are intentionally deferred until the core Telegram
+bot workflow is complete. Bot-only production runs without OIDC credentials; browser login
+endpoints remain implemented but return `503 TELEGRAM_OIDC_NOT_CONFIGURED` until the final Web
+Admin stage.
 Live channel validation requires the publishing bot token and administrator access to a real
 Telegram channel.
 
@@ -19,6 +22,7 @@ Telegram channel.
 - [x] Docker
 - [x] REST API shared by bot and Web Admin
 - [x] Telegram-based Web Admin authentication belongs to backend
+- [x] Telegram OIDC activation deferred until after the core bot workflow
 - [x] Shared user/domain model
 - [x] Secure cookie-based browser session
 - [x] Telegram Mini App / Web App excluded
@@ -29,11 +33,7 @@ Telegram channel.
 
 ## CI/CD
 
-- [x] `SERVER_HOST` configured in GitHub Actions
-- [x] `SERVER_PORT` configured in GitHub Actions
-- [x] `SERVER_USER` configured in GitHub Actions
-- [x] Dedicated `SERVER_SSH_KEY` configured
-- [x] `SERVER_KNOWN_HOSTS` configured
+- [ ] GitHub Environment production credentials configured
 - [x] GitHub Actions workflow implementation
 - [ ] First deployment validation
 
@@ -66,7 +66,7 @@ Telegram channel.
 - [x] Contracts/domain design
 - [x] NestJS scaffold
 - [x] Configuration
-- [x] Telegram authentication
+- [x] Telegram authentication implementation (production activation deferred)
 - [x] Session management
 - [x] CORS/public HTTPS API configuration
 - [x] Prisma schema
