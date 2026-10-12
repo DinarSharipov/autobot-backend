@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 
 import {
   type Prisma,
+  type PostSchedule,
   MisfirePolicy,
   PublicationStatus,
   ScheduleKind,
@@ -13,6 +14,7 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service.js
 import { serializableTransaction } from '../common/database/serializable-transaction.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { nextOccurrence, parseRecurrence } from './recurrence.js';
 import type { ScheduleCreateDto, ScheduleListQuery, ScheduleUpdateDto } from './schedules.dto.js';
 import { toScheduleView, type ScheduleView } from './schedule.types.js';
 
@@ -71,9 +73,10 @@ export class SchedulesService {
         const schedule = await transaction.postSchedule.create({
           data: {
             postId: input.postId,
-            kind: ScheduleKind.ONCE,
+            kind: input.kind,
             timezone: input.timezone,
             runAt: input.runAt,
+            rrule: input.rrule,
             nextRunAt: input.runAt,
             misfirePolicy: input.misfirePolicy,
             misfireGraceSeconds: input.misfireGraceSeconds,
@@ -87,7 +90,12 @@ export class SchedulesService {
             action: 'schedule.created',
             entityType: 'PostSchedule',
             entityId: schedule.id,
-            metadata: { postId: input.postId, runAt: input.runAt.toISOString() },
+            metadata: {
+              postId: input.postId,
+              kind: input.kind,
+              runAt: input.runAt.toISOString(),
+              ...(input.rrule ? { rrule: input.rrule } : {}),
+            },
           },
         });
         return toScheduleView(schedule);
@@ -104,12 +112,17 @@ export class SchedulesService {
       );
     }
     const current = await this.owned(userId, scheduleId);
-    if (current.kind !== ScheduleKind.ONCE || current.status !== ScheduleStatus.ACTIVE)
-      this.notEditable();
-    const data = this.updateData(dto);
+    if (current.status !== ScheduleStatus.ACTIVE) this.notEditable();
+    const existingPublications = await this.prisma.publication.count({ where: { scheduleId } });
+    if (existingPublications > 0) this.notEditable();
+    const data = this.updateData(dto, current);
     const result = await this.prisma.postSchedule.updateMany({
       where: { id: scheduleId, version, status: ScheduleStatus.ACTIVE, post: { userId } },
-      data: { ...data, version: { increment: 1 }, nextRunAt: data.runAt ?? current.runAt },
+      data: {
+        ...data,
+        version: { increment: 1 },
+        nextRunAt: data.runAt ?? current.runAt,
+      },
     });
     if (!result.count) await this.throwMutationMiss(userId, scheduleId);
     return this.get(userId, scheduleId);
@@ -159,7 +172,11 @@ export class SchedulesService {
 
   async materializeDue(now = new Date()): Promise<number> {
     const due = await this.prisma.postSchedule.findMany({
-      where: { kind: ScheduleKind.ONCE, status: ScheduleStatus.ACTIVE, nextRunAt: { lte: now } },
+      where: {
+        kind: { in: [ScheduleKind.ONCE, ScheduleKind.RECURRING] },
+        status: ScheduleStatus.ACTIVE,
+        nextRunAt: { lte: now },
+      },
       select: { id: true },
       orderBy: { nextRunAt: 'asc' },
       take: 50,
@@ -177,12 +194,13 @@ export class SchedulesService {
       });
       if (
         !schedule ||
-        schedule.kind !== ScheduleKind.ONCE ||
         schedule.status !== ScheduleStatus.ACTIVE ||
         !schedule.nextRunAt ||
         schedule.nextRunAt > now
       )
         return false;
+      if (schedule.kind === ScheduleKind.RECURRING)
+        return this.materializeRecurring(transaction, schedule, now);
       const scheduledFor = schedule.nextRunAt;
       const existing = await transaction.publication.findFirst({
         where: { scheduleId: schedule.id, scheduledFor },
@@ -237,6 +255,75 @@ export class SchedulesService {
     });
   }
 
+  private async materializeRecurring(
+    transaction: Prisma.TransactionClient,
+    schedule: Prisma.PostScheduleGetPayload<{ include: { post: true } }>,
+    now: Date,
+  ): Promise<boolean> {
+    if (!schedule.runAt || !schedule.rrule) return false;
+    const rule = parseRecurrence(schedule.rrule);
+    const occurrenceCount = await transaction.publication.count({
+      where: { scheduleId: schedule.id },
+    });
+    if (rule.count !== null && occurrenceCount >= rule.count) {
+      await transaction.postSchedule.update({
+        where: { id: schedule.id },
+        data: { status: ScheduleStatus.COMPLETED, nextRunAt: null, lastEvaluatedAt: now },
+      });
+      return false;
+    }
+    const scheduledFor = schedule.nextRunAt!;
+    const missed = scheduledFor < now;
+    const outsideGrace =
+      now.getTime() - scheduledFor.getTime() > schedule.misfireGraceSeconds * 1000;
+    const skip = missed && (schedule.misfirePolicy === MisfirePolicy.SKIP || outsideGrace);
+    const next = nextOccurrence({
+      after: scheduledFor,
+      anchor: schedule.runAt,
+      timezone: schedule.timezone,
+      rule,
+    });
+    const publication = await transaction.publication.create({
+      data: {
+        postId: schedule.postId,
+        scheduleId: schedule.id,
+        scheduledFor,
+        status: skip ? PublicationStatus.SKIPPED : PublicationStatus.PENDING,
+        ...(skip ? { errorCode: 'MISSED_SCHEDULE' } : {}),
+      },
+    });
+    if (!skip) {
+      await this.usage.reserve({
+        userId: schedule.post.userId,
+        metric: 'TEXT_GENERATION',
+        amount: 1,
+        operationKey: `publication:${publication.id}:text-generation:reserve`,
+        metadata: { publicationId: publication.id },
+        database: transaction,
+      });
+      await transaction.outboxEvent.create({
+        data: {
+          aggregateType: 'Publication',
+          aggregateId: publication.id,
+          eventType: 'publication.generation.requested.v1',
+          payload: { schemaVersion: 1, publicationId: publication.id },
+        },
+      });
+    }
+    const nextCount = occurrenceCount + 1;
+    const complete = !next || (rule.count !== null && nextCount >= rule.count);
+    await transaction.postSchedule.update({
+      where: { id: schedule.id },
+      data: {
+        status: complete ? ScheduleStatus.COMPLETED : ScheduleStatus.ACTIVE,
+        nextRunAt: complete ? null : next,
+        lastEvaluatedAt: now,
+        version: { increment: 1 },
+      },
+    });
+    return true;
+  }
+
   private async transition(
     userId: string,
     scheduleId: string,
@@ -252,22 +339,26 @@ export class SchedulesService {
       key,
       requestHash: this.idempotency.digest({ scheduleId, version }),
       handler: async (transaction) => {
+        const current = await transaction.postSchedule.findUniqueOrThrow({
+          where: { id: scheduleId },
+        });
+        const nextRunAt =
+          target === ScheduleStatus.PAUSED
+            ? null
+            : current.kind === ScheduleKind.RECURRING && current.runAt && current.rrule
+              ? nextOccurrence({
+                  after: new Date(),
+                  anchor: current.runAt,
+                  timezone: current.timezone,
+                  rule: parseRecurrence(current.rrule),
+                })
+              : current.runAt;
         const result = await transaction.postSchedule.updateMany({
           where: { id: scheduleId, version, status: source, post: { userId } },
           data: {
             status: target,
             version: { increment: 1 },
-            ...(target === ScheduleStatus.PAUSED
-              ? { nextRunAt: null }
-              : {
-                  nextRunAt: {
-                    set: (
-                      await transaction.postSchedule.findUniqueOrThrow({
-                        where: { id: scheduleId },
-                      })
-                    ).runAt,
-                  },
-                }),
+            nextRunAt,
           },
         });
         if (!result.count) await this.throwMutationMiss(userId, scheduleId, transaction);
@@ -296,6 +387,12 @@ export class SchedulesService {
         'INVALID_TIMEZONE',
         'Timezone must be a valid IANA timezone.',
       );
+    if (!dto.runAt)
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'RUN_AT_REQUIRED',
+        'runAt is required for schedules.',
+      );
     if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(dto.runAt))
       throw new ApiHttpException(
         HttpStatus.UNPROCESSABLE_ENTITY,
@@ -309,22 +406,55 @@ export class SchedulesService {
         'INVALID_RUN_AT',
         'runAt must be a valid date-time.',
       );
-    if (dto.misfirePolicy === MisfirePolicy.LATEST_ONLY)
-      throw new ApiHttpException(
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        'MISFIRE_POLICY_NOT_SUPPORTED',
-        'LATEST_ONLY is only supported for recurring schedules.',
-      );
+    const misfirePolicy =
+      dto.misfirePolicy ??
+      (dto.kind === ScheduleKind.RECURRING ? MisfirePolicy.LATEST_ONLY : MisfirePolicy.FIRE_ONCE);
+    const misfireGraceSeconds =
+      dto.misfireGraceSeconds ?? (dto.kind === ScheduleKind.RECURRING ? 21_600 : 86_400);
+    const rrule = dto.rrule?.trim() || null;
+    if (dto.kind === ScheduleKind.RECURRING) {
+      if (!rrule)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'RRULE_REQUIRED',
+          'Recurring schedules require RRULE.',
+        );
+      parseRecurrence(rrule);
+      if (misfirePolicy === MisfirePolicy.FIRE_ONCE)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'MISFIRE_POLICY_NOT_SUPPORTED',
+          'FIRE_ONCE is only supported for one-time schedules.',
+        );
+    } else {
+      if (rrule)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'RRULE_NOT_ALLOWED',
+          'One-time schedules cannot contain RRULE.',
+        );
+      if (misfirePolicy === MisfirePolicy.LATEST_ONLY)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'MISFIRE_POLICY_NOT_SUPPORTED',
+          'LATEST_ONLY is only supported for recurring schedules.',
+        );
+    }
     return {
       postId: dto.postId,
+      kind: dto.kind,
       timezone: dto.timezone,
       runAt,
-      misfirePolicy: dto.misfirePolicy,
-      misfireGraceSeconds: dto.misfireGraceSeconds,
+      rrule,
+      misfirePolicy,
+      misfireGraceSeconds,
     };
   }
 
-  private updateData(dto: ScheduleUpdateDto): Prisma.PostScheduleUpdateInput {
+  private updateData(
+    dto: ScheduleUpdateDto,
+    current: PostSchedule,
+  ): Prisma.PostScheduleUpdateInput {
     if (dto.timezone !== undefined && !this.validTimezone(dto.timezone))
       throw new ApiHttpException(
         HttpStatus.UNPROCESSABLE_ENTITY,
@@ -344,15 +474,40 @@ export class SchedulesService {
         'INVALID_RUN_AT',
         'runAt must be a valid date-time.',
       );
-    if (dto.misfirePolicy === MisfirePolicy.LATEST_ONLY)
+    const kind = current.kind;
+    const policy = dto.misfirePolicy ?? current.misfirePolicy;
+    if (kind === ScheduleKind.ONCE && policy === MisfirePolicy.LATEST_ONLY)
       throw new ApiHttpException(
         HttpStatus.UNPROCESSABLE_ENTITY,
         'MISFIRE_POLICY_NOT_SUPPORTED',
         'LATEST_ONLY is only supported for recurring schedules.',
       );
+    const rrule = dto.rrule === undefined ? current.rrule : dto.rrule;
+    if (kind === ScheduleKind.RECURRING) {
+      if (!rrule)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'RRULE_REQUIRED',
+          'Recurring schedules require RRULE.',
+        );
+      parseRecurrence(rrule);
+      if (policy === MisfirePolicy.FIRE_ONCE)
+        throw new ApiHttpException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'MISFIRE_POLICY_NOT_SUPPORTED',
+          'FIRE_ONCE is only supported for one-time schedules.',
+        );
+    } else if (dto.rrule !== undefined) {
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'RRULE_NOT_ALLOWED',
+        'One-time schedules cannot contain RRULE.',
+      );
+    }
     return {
       ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
       ...(runAt ? { runAt } : {}),
+      ...(dto.rrule !== undefined ? { rrule } : {}),
       ...(dto.misfirePolicy !== undefined ? { misfirePolicy: dto.misfirePolicy } : {}),
       ...(dto.misfireGraceSeconds !== undefined
         ? { misfireGraceSeconds: dto.misfireGraceSeconds }

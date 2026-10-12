@@ -657,4 +657,37 @@ describe('core domain and entitlements', () => {
       errorCode: 'MISSED_SCHEDULE',
     });
   });
+
+  it('materializes recurring schedules and completes them at COUNT', async () => {
+    await user('9101');
+    const channel = await postAs('9101', '/api/v1/channels', { telegramChatId: '-100911' }).expect(
+      201,
+    );
+    const channelId = (channel.body as { data: { id: string } }).data.id;
+    const post = await postAs('9101', '/api/v1/posts', {
+      channelId,
+      prompt: 'Recurring update',
+      publicationMode: 'AUTO',
+    }).expect(201);
+    const postId = (post.body as { data: { id: string } }).data.id;
+    const anchor = new Date(Date.now() - 1_000);
+    const scheduled = await postAs('9101', '/api/v1/schedules', {
+      postId,
+      kind: 'RECURRING',
+      timezone: 'UTC',
+      runAt: anchor.toISOString(),
+      rrule: 'FREQ=DAILY;COUNT=2',
+      misfirePolicy: 'LATEST_ONLY',
+      misfireGraceSeconds: 21_600,
+    }).expect(201);
+    const scheduleId = (scheduled.body as { data: { id: string } }).data.id;
+    expect(await schedules.materializeDue(new Date())).toBe(1);
+    const first = await prisma.publication.findFirstOrThrow({ where: { scheduleId } });
+    expect(first.status).toBe('PENDING');
+    expect(await schedules.materializeDue(new Date(anchor.getTime() + 86_401_000))).toBe(1);
+    expect(await prisma.publication.count({ where: { scheduleId } })).toBe(2);
+    expect(
+      await prisma.postSchedule.findUniqueOrThrow({ where: { id: scheduleId } }),
+    ).toMatchObject({ status: 'COMPLETED', nextRunAt: null });
+  });
 });

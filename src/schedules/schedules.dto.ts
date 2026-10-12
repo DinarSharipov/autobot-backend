@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsEnum,
-  IsIn,
   IsInt,
   IsISO8601,
   IsOptional,
@@ -12,32 +11,38 @@ import {
   Min,
 } from 'class-validator';
 
-import { MisfirePolicy, ScheduleStatus } from '../generated/prisma/client.js';
+import { MisfirePolicy, ScheduleKind, ScheduleStatus } from '../generated/prisma/client.js';
 
 export class ScheduleCreateDto {
   @IsUUID()
   postId!: string;
 
-  @IsIn(['ONCE'])
-  kind!: 'ONCE';
+  @IsEnum(ScheduleKind)
+  kind!: ScheduleKind;
 
   @IsString()
   @MaxLength(128)
   timezone!: string;
 
+  @IsOptional()
   @IsISO8601()
-  runAt!: string;
+  runAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  rrule?: string;
 
   @IsOptional()
   @IsEnum(MisfirePolicy)
-  misfirePolicy: MisfirePolicy = MisfirePolicy.FIRE_ONCE;
+  misfirePolicy?: MisfirePolicy;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   @Max(604800)
-  misfireGraceSeconds = 86_400;
+  misfireGraceSeconds?: number;
 }
 
 export class ScheduleUpdateDto {
@@ -49,6 +54,11 @@ export class ScheduleUpdateDto {
   @IsOptional()
   @IsISO8601()
   runAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(512)
+  rrule?: string;
 
   @IsOptional()
   @IsEnum(MisfirePolicy)

@@ -8,8 +8,10 @@ Stage 5 is in progress: post definitions and immediate publication occurrences u
 text-usage reservation and durable outbox event. The OpenAI text adapter and generation worker
 persist immutable versions plus content-free accounting metadata. Moderation approval, rejection,
 and revision requests now use optimistic versions, idempotent commands, immutable replacement
-versions, and durable generation dispatch; live provider execution still requires an API account
-with available quota. Scheduling and Telegram delivery remain the following slices.
+versions, and durable generation dispatch. One-time and recurring scheduling now persist UTC
+occurrences, validate a supported RRULE subset, preserve local wall-clock time across DST, and
+reconcile missed occurrences transactionally; live provider execution still requires an API
+account with available quota. Telegram delivery remains the following slice.
 Telegram OIDC activation and browser sessions are intentionally deferred until the core Telegram
 bot workflow is complete. Bot-only production runs without OIDC credentials; browser login
 endpoints remain implemented but return `503 TELEGRAM_OIDC_NOT_CONFIGURED` until the final Web
@@ -84,7 +86,7 @@ Telegram channel.
 - [x] Topics module
 - [x] Posts/versioning module (post definitions, immediate occurrence and version-history read API)
 - [x] Moderation module (approval, rejection, revision, shared queue state)
-- [x] Scheduling module (one-time schedules, pause/resume/cancel, durable materialization)
+- [x] Scheduling module (one-time/recurring RRULE schedules, pause/resume/cancel, durable materialization and reconciliation)
 - [ ] Publishing module
 - [ ] AI adapters
 - [x] Subscription/usage module
