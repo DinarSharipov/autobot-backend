@@ -88,6 +88,10 @@ services:
   autobot-postgres:
     container_name: autobot-postgres
     image: postgres:17-alpine
+    # Required on the current production host: its legacy Docker seccomp profile blocks a
+    # PostgreSQL syscall during initdb. Scope the compatibility exception to the private DB only.
+    security_opt:
+      - seccomp=unconfined
     environment:
       POSTGRES_USER: ${AUTOBOT_DB_USER:-autobot}
       POSTGRES_PASSWORD: ${AUTOBOT_DB_PASSWORD:-autobot}

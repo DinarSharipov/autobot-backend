@@ -13,6 +13,10 @@ The backend and grammY bot are independent Compose projects on the same host:
 - backend-only internal network: `autobot-backend-internal`;
 - PostgreSQL and Redis have no public ports in production.
 
+The current host needs `seccomp=unconfined` only for `autobot-postgres` because its legacy Docker
+seccomp profile rejects a PostgreSQL initialization syscall. The database remains isolated on the
+private backend network; remove this compatibility exception after the host runtime is upgraded.
+
 Neither deployment may run `docker compose down` outside its own project or restart containers
 owned by the other repository. The shared network is infrastructure with an independent lifecycle
 and must not be removed by either deployment.
