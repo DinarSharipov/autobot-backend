@@ -40,6 +40,7 @@ services:
       IMAGE_TEMP_DIR: /tmp/autobot-images
       OPEN_API_KEY: ${OPEN_API_KEY:-}
       AI_TEXT_MODEL: ${AI_TEXT_MODEL:-gpt-5-mini}
+      AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-gpt-image-1}
       AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-30000}
       TELEGRAM_OIDC_ISSUER: ${TELEGRAM_OIDC_ISSUER:-https://oauth.telegram.org}
       TELEGRAM_OIDC_CLIENT_ID: ${TELEGRAM_OIDC_CLIENT_ID:-}

@@ -14,6 +14,10 @@ import {
   TelegramBotApiPublicationAdapter,
   TelegramPublicationAdapter,
 } from './telegram-publication.adapter.js';
+import {
+  ImageGenerationAdapter,
+  OpenAiImageGenerationAdapter,
+} from './image-generation.adapter.js';
 
 @Module({
   imports: [AuthModule, QueueModule, IdempotencyModule, SubscriptionsModule],
@@ -24,6 +28,8 @@ import {
     PublicationProcessor,
     TelegramBotApiPublicationAdapter,
     { provide: TelegramPublicationAdapter, useExisting: TelegramBotApiPublicationAdapter },
+    OpenAiImageGenerationAdapter,
+    { provide: ImageGenerationAdapter, useExisting: OpenAiImageGenerationAdapter },
   ],
 })
 export class PublishingModule {}

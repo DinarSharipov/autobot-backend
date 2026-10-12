@@ -66,6 +66,7 @@ const environmentSchema = z
       .default(500 * 1024 * 1024),
     OPEN_API_KEY: optionalNonEmptyString,
     AI_TEXT_MODEL: z.string().min(1).max(128).default('gpt-5-mini'),
+    AI_IMAGE_MODEL: z.string().min(1).max(128).default('gpt-image-1'),
     AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
     TELEGRAM_OIDC_ISSUER: z.url().default('https://oauth.telegram.org'),
     TELEGRAM_OIDC_CLIENT_ID: optionalNonEmptyString,

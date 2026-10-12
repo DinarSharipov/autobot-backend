@@ -236,6 +236,16 @@ export class GenerationService {
         metadata: { publicationId: claim.publicationId },
         database: transaction,
       });
+      if (publication.post.generateImage) {
+        await this.usage.release({
+          userId: publication.post.userId,
+          metric: 'IMAGE_GENERATION',
+          amount: 1,
+          operationKey: `publication:${claim.publicationId}:image-generation:release`,
+          metadata: { publicationId: claim.publicationId },
+          database: transaction,
+        });
+      }
     });
   }
 }

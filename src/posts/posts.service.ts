@@ -169,6 +169,16 @@ export class PostsService {
           metadata: { publicationId: publication.id },
           database: transaction,
         });
+        if (post.generateImage) {
+          await this.usage.reserve({
+            userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `publication:${publication.id}:image-generation:reserve`,
+            metadata: { publicationId: publication.id },
+            database: transaction,
+          });
+        }
         await transaction.outboxEvent.create({
           data: {
             aggregateType: 'Publication',

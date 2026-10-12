@@ -7,18 +7,28 @@ import { ApiHttpException } from '../common/http/api-http.exception.js';
 import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
+import { ImageTempService } from '../infrastructure/image-temp/image-temp.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
 import {
   TelegramPublicationAdapter,
   TelegramPublicationError,
 } from './telegram-publication.adapter.js';
+import {
+  ImageGenerationAdapter,
+  ImageGenerationProviderError,
+} from './image-generation.adapter.js';
 import type { PublicationListQuery } from './publishing.dto.js';
 
 const RETRYABLE_CODES = new Set([
   'TELEGRAM_RATE_LIMIT',
   'TELEGRAM_API_UNAVAILABLE',
   'TELEGRAM_NOT_CONFIGURED',
+  'PUBLICATION_IMAGE_UNAVAILABLE',
+  'AI_IMAGE_PROVIDER_NETWORK_ERROR',
+  'AI_IMAGE_PROVIDER_RATE_LIMITED',
+  'AI_IMAGE_TEMP_STORAGE_UNAVAILABLE',
+  'AI_IMAGE_DOWNLOAD_FAILED',
 ]);
 
 @Injectable()
@@ -29,6 +39,8 @@ export class PublishingService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly adapter: TelegramPublicationAdapter,
+    private readonly imageGeneration: ImageGenerationAdapter,
+    private readonly temporaryImages: ImageTempService,
     private readonly idempotency: IdempotencyService,
     private readonly usage: UsageService,
   ) {}
@@ -91,22 +103,39 @@ export class PublishingService {
     });
     if (!publication) return;
     if (!publication.selectedVersion?.text?.trim()) {
-      await this.fail(publicationId, 'PUBLICATION_TEXT_NOT_AVAILABLE', 'Selected text is missing.');
+      await this.fail(
+        publicationId,
+        'PUBLICATION_TEXT_NOT_AVAILABLE',
+        'Selected text is missing.',
+        Boolean(publication.post.generateImage),
+      );
       return;
     }
 
+    let imagePath: string | undefined;
+    let imageUsageCommitted = false;
     try {
-      const result = await this.adapter.sendText(
-        publication.post.channel.telegramChatId,
-        publication.selectedVersion.text,
-      );
+      const result = publication.post.generateImage
+        ? await this.publishWithImage(
+            publication,
+            (path) => {
+              imagePath = path;
+            },
+            () => {
+              imageUsageCommitted = true;
+            },
+          )
+        : await this.adapter.sendText(
+            publication.post.channel.telegramChatId,
+            publication.selectedVersion.text,
+          );
       await this.prisma.publication.updateMany({
         where: { id: publicationId, status: PublicationStatus.PUBLISHING },
         data: {
           status: PublicationStatus.PUBLISHED,
           telegramChatId: result.chatId,
           telegramMessageId: result.messageId,
-          publishedWithImage: false,
+          publishedWithImage: publication.post.generateImage,
           publishedAt: new Date(),
           nextAttemptAt: null,
           errorCode: null,
@@ -114,8 +143,45 @@ export class PublishingService {
         },
       });
     } catch (error) {
-      await this.handleError(publicationId, publication.attemptCount, error);
+      await this.handleError(
+        publicationId,
+        publication.attemptCount,
+        error,
+        publication.post.generateImage && !imageUsageCommitted,
+      );
+    } finally {
+      if (imagePath) await this.temporaryImages.remove(imagePath);
     }
+  }
+
+  private async publishWithImage(
+    publication: {
+      id: string;
+      post: { prompt: string; userId: string; channel: { telegramChatId: bigint } };
+      selectedVersion: { text: string | null } | null;
+    },
+    onPath: (path: string) => void,
+    onUsageCommitted: () => void,
+  ) {
+    const image = await this.imageGeneration.generate({
+      prompt: publication.post.prompt,
+      text: publication.selectedVersion!.text!,
+      idempotencyKey: `publication:${publication.id}:image`,
+    });
+    onPath(image.filePath);
+    await this.usage.commit({
+      userId: publication.post.userId,
+      metric: 'IMAGE_GENERATION',
+      amount: 1,
+      operationKey: `publication:${publication.id}:image-generation:commit`,
+      metadata: { publicationId: publication.id },
+    });
+    onUsageCommitted();
+    return this.adapter.sendPhoto(
+      publication.post.channel.telegramChatId,
+      publication.selectedVersion!.text!,
+      image.filePath,
+    );
   }
 
   async retry(userId: string, publicationId: string, key: string): Promise<PublicationView> {
@@ -191,6 +257,16 @@ export class PublishingService {
             database: transaction,
           });
         }
+        if (publication.post.generateImage) {
+          await this.usage.release({
+            userId: publication.post.userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `publication:${publication.id}:image-generation:release`,
+            metadata: { publicationId: publication.id },
+            database: transaction,
+          });
+        }
         return toPublicationView(
           await transaction.publication.update({
             where: { id: publication.id },
@@ -205,6 +281,7 @@ export class PublishingService {
     publicationId: string,
     attemptCount: number,
     error: unknown,
+    releaseImage: boolean,
   ): Promise<void> {
     if (error instanceof TelegramPublicationError && error.ambiguous) {
       await this.prisma.publication.updateMany({
@@ -218,9 +295,14 @@ export class PublishingService {
       return;
     }
     const code =
-      error instanceof TelegramPublicationError ? error.code : 'TELEGRAM_API_UNAVAILABLE';
+      error instanceof TelegramPublicationError || error instanceof ImageGenerationProviderError
+        ? error.code
+        : 'TELEGRAM_API_UNAVAILABLE';
     const message = error instanceof Error ? error.message : 'Telegram publication failed.';
-    const retryable = error instanceof TelegramPublicationError ? error.retryable : true;
+    const retryable =
+      error instanceof TelegramPublicationError || error instanceof ImageGenerationProviderError
+        ? error.retryable
+        : true;
     const maxAttempts = this.config.get('PUBLICATION_MAX_ATTEMPTS', { infer: true });
     if (retryable && attemptCount < maxAttempts) {
       const retryAfter =
@@ -237,18 +319,41 @@ export class PublishingService {
       });
       return;
     }
-    await this.fail(publicationId, code, message);
+    await this.fail(publicationId, code, message, releaseImage);
   }
 
-  private async fail(publicationId: string, code: string, message: string): Promise<void> {
-    await this.prisma.publication.updateMany({
-      where: { id: publicationId, status: PublicationStatus.PUBLISHING },
-      data: {
-        status: PublicationStatus.FAILED,
-        errorCode: code,
-        errorDetails: { message },
-        nextAttemptAt: null,
-      },
+  private async fail(
+    publicationId: string,
+    code: string,
+    message: string,
+    releaseImage = false,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.publication.updateMany({
+        where: { id: publicationId, status: PublicationStatus.PUBLISHING },
+        data: {
+          status: PublicationStatus.FAILED,
+          errorCode: code,
+          errorDetails: { message },
+          nextAttemptAt: null,
+        },
+      });
+      if (updated.count && releaseImage) {
+        const publication = await transaction.publication.findUnique({
+          where: { id: publicationId },
+          include: { post: true },
+        });
+        if (publication?.post.generateImage) {
+          await this.usage.release({
+            userId: publication.post.userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `publication:${publication.id}:image-generation:release`,
+            metadata: { publicationId: publication.id },
+            database: transaction,
+          });
+        }
+      }
     });
     this.logger.warn({ event: 'publication_failed', publicationId, code });
   }

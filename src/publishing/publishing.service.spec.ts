@@ -12,7 +12,7 @@ function publication(status: PublicationStatus = PublicationStatus.READY) {
     attemptCount: status === PublicationStatus.RETRY_WAIT ? 1 : 0,
     status,
     selectedVersion: { text: 'Hello from Autobot' },
-    post: { channel: { telegramChatId: -100123n } },
+    post: { userId: 'user-1', generateImage: false, channel: { telegramChatId: -100123n } },
   };
 }
 
@@ -37,6 +37,8 @@ describe('PublishingService', () => {
       prisma as never,
       { get: vi.fn().mockReturnValue(5) } as never,
       adapter,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
     );

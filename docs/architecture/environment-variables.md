@@ -74,11 +74,12 @@ The bot repository receives the matching key ID/secret through its own secret st
 
 ## AI providers
 
-| Variable                | Required        | Secret | Purpose                                                                |
-| ----------------------- | --------------- | ------ | ---------------------------------------------------------------------- |
-| `OPEN_API_KEY`          | text generation | yes    | OpenAI API credential; never use a Telegram token or commit this value |
-| `AI_TEXT_MODEL`         | text generation | no     | OpenAI Responses model identifier; defaults to `gpt-5-mini`            |
-| `AI_REQUEST_TIMEOUT_MS` | no              | no     | Upstream timeout                                                       |
+| Variable                | Required         | Secret | Purpose                                                                |
+| ----------------------- | ---------------- | ------ | ---------------------------------------------------------------------- |
+| `OPEN_API_KEY`          | text generation  | yes    | OpenAI API credential; never use a Telegram token or commit this value |
+| `AI_TEXT_MODEL`         | text generation  | no     | OpenAI Responses model identifier; defaults to `gpt-5-mini`            |
+| `AI_IMAGE_MODEL`        | image generation | no     | OpenAI Images model identifier; defaults to `gpt-image-1`              |
+| `AI_REQUEST_TIMEOUT_MS` | no               | no     | Upstream timeout                                                       |
 
 Provider-specific optional settings use a documented adapter prefix and must not leak into domain contracts.
 

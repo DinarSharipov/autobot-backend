@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
+
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -23,6 +26,11 @@ export class TelegramPublicationError extends Error {
 
 export abstract class TelegramPublicationAdapter {
   abstract sendText(chatId: bigint, text: string): Promise<TelegramPublicationResult>;
+  abstract sendPhoto(
+    chatId: bigint,
+    caption: string,
+    filePath: string,
+  ): Promise<TelegramPublicationResult>;
 }
 
 type TelegramMessage = { message_id?: unknown; chat?: { id?: unknown } };
@@ -70,19 +78,105 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
       );
     }
 
+    const response = await this.request('sendMessage', { chat_id: chatId.toString(), text });
+    return this.result(response);
+  }
+
+  async sendPhoto(
+    chatId: bigint,
+    caption: string,
+    filePath: string,
+  ): Promise<TelegramPublicationResult> {
+    if (!caption.trim()) {
+      throw new TelegramPublicationError(
+        'PUBLICATION_TEXT_EMPTY',
+        false,
+        false,
+        undefined,
+        'Publication caption is empty.',
+      );
+    }
+    if (caption.length > 1024) {
+      throw new TelegramPublicationError(
+        'PUBLICATION_CAPTION_TOO_LONG',
+        false,
+        false,
+        undefined,
+        'Telegram photo caption exceeds the 1024 character limit.',
+      );
+    }
+
+    const token = this.config.get('TELEGRAM_BOT_TOKEN', { infer: true });
+    if (!token) {
+      throw new TelegramPublicationError(
+        'TELEGRAM_NOT_CONFIGURED',
+        true,
+        false,
+        undefined,
+        'Telegram bot token is not configured.',
+      );
+    }
+
     let response: Response;
-    let payload: TelegramPayload;
     try {
+      const form = new FormData();
+      form.set('chat_id', chatId.toString());
+      form.set('caption', caption);
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(filePath);
+      } catch (error) {
+        throw new TelegramPublicationError(
+          'PUBLICATION_IMAGE_UNAVAILABLE',
+          true,
+          false,
+          undefined,
+          error instanceof Error ? error.message : 'Temporary image file is unavailable.',
+        );
+      }
+      form.set('photo', new Blob([bytes], { type: 'image/png' }), basename(filePath));
       response = await fetch(
-        `${this.config.get('TELEGRAM_API_BASE_URL', { infer: true })}/bot${token}/sendMessage`,
+        `${this.config.get('TELEGRAM_API_BASE_URL', { infer: true })}/bot${token}/sendPhoto`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId.toString(), text }),
+          body: form,
           signal: AbortSignal.timeout(this.config.get('TELEGRAM_API_TIMEOUT_MS', { infer: true })),
         },
       );
-      payload = (await response.json()) as TelegramPayload;
+    } catch (error) {
+      if (error instanceof TelegramPublicationError) throw error;
+      throw new TelegramPublicationError(
+        'TELEGRAM_DELIVERY_UNKNOWN',
+        false,
+        true,
+        undefined,
+        error instanceof Error ? error.message : 'Telegram response was not received.',
+      );
+    }
+    return this.result(response);
+  }
+
+  private async request(method: 'sendMessage', body: Record<string, string>): Promise<Response> {
+    const token = this.config.get('TELEGRAM_BOT_TOKEN', { infer: true });
+    if (!token) {
+      throw new TelegramPublicationError(
+        'TELEGRAM_NOT_CONFIGURED',
+        true,
+        false,
+        undefined,
+        'Telegram bot token is not configured.',
+      );
+    }
+    try {
+      return await fetch(
+        `${this.config.get('TELEGRAM_API_BASE_URL', { infer: true })}/bot${token}/${method}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(this.config.get('TELEGRAM_API_TIMEOUT_MS', { infer: true })),
+        },
+      );
     } catch (error) {
       throw new TelegramPublicationError(
         'TELEGRAM_DELIVERY_UNKNOWN',
@@ -90,6 +184,21 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
         true,
         undefined,
         error instanceof Error ? error.message : 'Telegram response was not received.',
+      );
+    }
+  }
+
+  private async result(response: Response): Promise<TelegramPublicationResult> {
+    let payload: TelegramPayload;
+    try {
+      payload = (await response.json()) as TelegramPayload;
+    } catch (error) {
+      throw new TelegramPublicationError(
+        'TELEGRAM_DELIVERY_UNKNOWN',
+        false,
+        true,
+        undefined,
+        error instanceof Error ? error.message : 'Telegram returned invalid JSON.',
       );
     }
 

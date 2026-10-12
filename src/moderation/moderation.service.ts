@@ -10,7 +10,7 @@ import type { ModerationListQuery } from './moderation.dto.js';
 import { toModerationRequestView } from './moderation.types.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
 
-const moderationInclude = { postVersion: true, publication: true } as const;
+const moderationInclude = { postVersion: true, publication: { include: { post: true } } } as const;
 
 @Injectable()
 export class ModerationService {
@@ -121,6 +121,16 @@ export class ModerationService {
           where: { id: request.publicationId },
           data: { status: 'CANCELLED' },
         });
+        if (request.publication.post.generateImage) {
+          await this.usage.release({
+            userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `publication:${request.publicationId}:image-generation:release`,
+            metadata: { publicationId: request.publicationId },
+            database: transaction,
+          });
+        }
         await this.audit(transaction, userId, request.id, 'moderation.rejected', {
           publicationId: request.publicationId,
           versionId: request.versionId,

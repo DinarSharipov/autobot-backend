@@ -233,6 +233,16 @@ export class SchedulesService {
           metadata: { publicationId: publication.id },
           database: transaction,
         });
+        if (schedule.post.generateImage) {
+          await this.usage.reserve({
+            userId: schedule.post.userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `publication:${publication.id}:image-generation:reserve`,
+            metadata: { publicationId: publication.id },
+            database: transaction,
+          });
+        }
         await transaction.outboxEvent.create({
           data: {
             aggregateType: 'Publication',
@@ -301,6 +311,16 @@ export class SchedulesService {
         metadata: { publicationId: publication.id },
         database: transaction,
       });
+      if (schedule.post.generateImage) {
+        await this.usage.reserve({
+          userId: schedule.post.userId,
+          metric: 'IMAGE_GENERATION',
+          amount: 1,
+          operationKey: `publication:${publication.id}:image-generation:reserve`,
+          metadata: { publicationId: publication.id },
+          database: transaction,
+        });
+      }
       await transaction.outboxEvent.create({
         data: {
           aggregateType: 'Publication',
