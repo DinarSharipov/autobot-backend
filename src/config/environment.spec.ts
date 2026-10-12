@@ -91,4 +91,21 @@ describe('validateEnvironment', () => {
       }),
     ).toThrow('must be true when SameSite=None');
   });
+
+  it('requires a separate token when metrics are enabled', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        METRICS_ENABLED: 'true',
+      }),
+    ).toThrow('METRICS_AUTH_TOKEN');
+
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        METRICS_ENABLED: 'true',
+        METRICS_AUTH_TOKEN: 'm'.repeat(32),
+      }),
+    ).not.toThrow();
+  });
 });

@@ -49,6 +49,13 @@ Environment variables:
 - `API_PUBLIC_URL`
 - `BOT_SERVICE_ACTIVE_KEY_ID`
 
+Optional observability configuration:
+
+- Set `METRICS_ENABLED=true` only when a private monitoring path is available.
+- Provide a separate `METRICS_AUTH_TOKEN` (at least 32 characters) and send it as the
+  `X-Metrics-Token` header to `/api/v1/internal/metrics`.
+- Do not publish the metrics route through a public monitoring URL or place the token in logs.
+
 Deferred until the final Web Admin stage:
 
 - secret `TELEGRAM_OIDC_CLIENT_SECRET`;

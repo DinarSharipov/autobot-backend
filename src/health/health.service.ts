@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { RedisService } from '../infrastructure/redis/redis.service.js';
+import { MetricsService } from '../common/observability/metrics.service.js';
 
 export type HealthResponse = {
   status: 'ok';
@@ -25,6 +26,7 @@ export class HealthService {
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly metrics: MetricsService,
   ) {}
 
   live(): HealthResponse {
@@ -33,6 +35,14 @@ export class HealthService {
 
   async ready(): Promise<ReadinessResponse> {
     const checks = await Promise.allSettled([this.prisma.ping(), this.redis.ping()]);
+    this.metrics.increment('autobot_dependency_checks_total', {
+      dependency: 'postgres',
+      status: checks[0]?.status === 'fulfilled' ? 'up' : 'down',
+    });
+    this.metrics.increment('autobot_dependency_checks_total', {
+      dependency: 'redis',
+      status: checks[1]?.status === 'fulfilled' ? 'up' : 'down',
+    });
     const unavailable = [
       ...(checks[0]?.status === 'rejected' ? ['postgres'] : []),
       ...(checks[1]?.status === 'rejected' ? ['redis'] : []),

@@ -38,6 +38,11 @@ const environmentSchema = z
     PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
     API_PUBLIC_URL: z.url().default('http://localhost:3000'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'log', 'debug', 'verbose']).default('log'),
+    METRICS_ENABLED: environmentBoolean.default(false),
+    METRICS_AUTH_TOKEN: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(32).optional(),
+    ),
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
     BUILD_SHA: z.string().min(1).max(128).default('development'),
     CORS_ALLOWED_ORIGINS: commaSeparatedUrls,
@@ -117,6 +122,13 @@ const environmentSchema = z
     PUBLICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   })
   .superRefine((environment, context) => {
+    if (environment.METRICS_ENABLED && !environment.METRICS_AUTH_TOKEN) {
+      context.addIssue({
+        code: 'custom',
+        path: ['METRICS_AUTH_TOKEN'],
+        message: 'is required when metrics are enabled',
+      });
+    }
     if (environment.CORS_ALLOWED_ORIGINS.includes('*')) {
       context.addIssue({
         code: 'custom',

@@ -9,6 +9,7 @@ import { type PostGenerationJobPayload } from '../infrastructure/queue/job-contr
 import { QUEUE_NAMES } from '../infrastructure/queue/queue.constants.js';
 import { GenerationService } from './generation.service.js';
 import { TextGenerationProviderError } from './text-generation.adapter.js';
+import { MetricsService } from '../common/observability/metrics.service.js';
 
 @Injectable()
 export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
@@ -109,13 +110,21 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
 
 @Processor(QUEUE_NAMES.postGeneration, { concurrency: 2 })
 export class PostGenerationProcessor extends WorkerHost {
-  constructor(private readonly generation: GenerationService) {
+  constructor(
+    private readonly generation: GenerationService,
+    private readonly metrics: MetricsService,
+  ) {
     super();
   }
 
   async process(job: Job<PostGenerationJobPayload>): Promise<void> {
+    const startedAt = performance.now();
     try {
       await this.generation.generate(job.data.publicationId);
+      this.metrics.increment('autobot_queue_jobs_total', {
+        queue: QUEUE_NAMES.postGeneration,
+        status: 'completed',
+      });
     } catch (error) {
       if (
         error instanceof TextGenerationProviderError &&
@@ -123,9 +132,23 @@ export class PostGenerationProcessor extends WorkerHost {
         job.attemptsMade + 1 >= (job.opts.attempts ?? 1)
       ) {
         await this.generation.failAfterRetries(job.data.publicationId, error.code);
+        this.metrics.increment('autobot_queue_jobs_total', {
+          queue: QUEUE_NAMES.postGeneration,
+          status: 'terminal_failure',
+        });
         return;
       }
+      this.metrics.increment('autobot_queue_jobs_total', {
+        queue: QUEUE_NAMES.postGeneration,
+        status: 'failed',
+      });
       throw error;
+    } finally {
+      this.metrics.observe(
+        'autobot_queue_job_duration_seconds',
+        (performance.now() - startedAt) / 1000,
+        { queue: QUEUE_NAMES.postGeneration },
+      );
     }
   }
 }

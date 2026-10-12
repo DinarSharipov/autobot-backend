@@ -5,6 +5,7 @@ import type { ConnectionOptions } from 'bullmq';
 
 import type { AppEnvironment } from '../../config/environment.js';
 import { QUEUE_NAMES } from './queue.constants.js';
+import { QueueMetricsService } from './queue-metrics.service.js';
 
 function connectionFromUrl(value: string): ConnectionOptions {
   const url = new URL(value);
@@ -39,6 +40,7 @@ function connectionFromUrl(value: string): ConnectionOptions {
       { name: QUEUE_NAMES.outbox },
     ),
   ],
+  providers: [QueueMetricsService],
   exports: [BullModule],
 })
 export class QueueModule {}

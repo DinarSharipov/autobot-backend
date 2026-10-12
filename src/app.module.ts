@@ -22,6 +22,7 @@ import { RedisModule } from './infrastructure/redis/redis.module.js';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TopicsModule } from './topics/topics.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
+import { ObservabilityModule } from './common/observability/observability.module.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PublishingModule } from './publishing/publishing.module.js';
     GenerationModule,
     SchedulesModule,
     PublishingModule,
+    ObservabilityModule,
     HealthModule,
   ],
   controllers: [AppController],

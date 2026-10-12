@@ -9,6 +9,7 @@ import {
 import type { Request, Response } from 'express';
 
 import type { RequestWithId } from './request-id.middleware.js';
+import { MetricsService } from '../observability/metrics.service.js';
 
 type ExceptionBody = {
   code?: string;
@@ -16,9 +17,13 @@ type ExceptionBody = {
   details?: Record<string, unknown>;
 };
 
+type RoutedRequest = { route?: { path?: unknown }; path: string };
+
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
+
+  constructor(private readonly metrics: MetricsService) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
@@ -28,6 +33,15 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const status =
       exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
     const exceptionBody = this.getExceptionBody(exception);
+
+    const routedRequest = request as unknown as RoutedRequest;
+    const route =
+      typeof routedRequest.route?.path === 'string' ? routedRequest.route.path : routedRequest.path;
+    this.metrics.increment('autobot_http_errors_total', {
+      method: request.method,
+      route,
+      status,
+    });
 
     if (status >= 500) {
       this.logger.error({

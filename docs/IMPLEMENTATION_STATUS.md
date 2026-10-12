@@ -99,3 +99,4 @@ Telegram channel.
 - [x] Health checks
 - [x] CI/CD workflow
 - [x] Automated tests
+- [x] Structured HTTP/dependency metrics with an optionally enabled, token-protected Prometheus endpoint

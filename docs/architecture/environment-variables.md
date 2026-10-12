@@ -11,6 +11,8 @@ All variables are validated at process startup. Required production secrets have
 | `API_PUBLIC_URL`          | production   | no     | Canonical public HTTPS API origin                      |
 | `BUILD_SHA`               | CI/deploy    | no     | Immutable deployed revision                            |
 | `LOG_LEVEL`               | yes          | no     | Structured log level                                   |
+| `METRICS_ENABLED`         | yes          | no     | Enables the internal Prometheus endpoint               |
+| `METRICS_AUTH_TOKEN`      | conditional  | yes    | Secret `X-Metrics-Token` when metrics are enabled      |
 | `TRUST_PROXY_HOPS`        | production   | no     | Explicit reverse-proxy hop count                       |
 | `CORS_ALLOWED_ORIGINS`    | browser API  | no     | Comma-separated exact HTTPS Web Admin origins          |
 | `WEB_ALLOWED_RETURN_URLS` | browser auth | no     | Exact/prefix allowlist for post-login redirects        |

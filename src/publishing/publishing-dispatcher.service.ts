@@ -8,6 +8,7 @@ import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import type { PublicationJobPayload } from '../infrastructure/queue/job-contracts.js';
 import { QUEUE_NAMES } from '../infrastructure/queue/queue.constants.js';
 import { PublishingService } from './publishing.service.js';
+import { MetricsService } from '../common/observability/metrics.service.js';
 
 @Injectable()
 export class PublicationDispatcherService implements OnModuleInit, OnModuleDestroy {
@@ -68,11 +69,33 @@ export class PublicationDispatcherService implements OnModuleInit, OnModuleDestr
 
 @Processor(QUEUE_NAMES.publication, { concurrency: 2 })
 export class PublicationProcessor extends WorkerHost {
-  constructor(private readonly publishing: PublishingService) {
+  constructor(
+    private readonly publishing: PublishingService,
+    private readonly metrics: MetricsService,
+  ) {
     super();
   }
 
   async process(job: Job<PublicationJobPayload>): Promise<void> {
-    await this.publishing.publish(job.data.publicationId);
+    const startedAt = performance.now();
+    try {
+      await this.publishing.publish(job.data.publicationId);
+      this.metrics.increment('autobot_queue_jobs_total', {
+        queue: QUEUE_NAMES.publication,
+        status: 'completed',
+      });
+    } catch (error) {
+      this.metrics.increment('autobot_queue_jobs_total', {
+        queue: QUEUE_NAMES.publication,
+        status: 'failed',
+      });
+      throw error;
+    } finally {
+      this.metrics.observe(
+        'autobot_queue_job_duration_seconds',
+        (performance.now() - startedAt) / 1000,
+        { queue: QUEUE_NAMES.publication },
+      );
+    }
   }
 }
