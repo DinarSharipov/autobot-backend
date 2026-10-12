@@ -1,0 +1,9 @@
+[Unit]
+Description=Update Autobot backend from published dev images
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/autobot/backend/backend-update.sh

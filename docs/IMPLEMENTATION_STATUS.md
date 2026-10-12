@@ -33,9 +33,9 @@ Telegram channel.
 
 ## CI/CD
 
-- [ ] GitHub Environment production credentials configured
+- [x] Server-side pull deployment avoids GitHub runtime secrets
 - [x] GitHub Actions workflow implementation
-- [ ] First deployment validation
+- [x] First deployment validation
 
 ## Planning and contracts
 

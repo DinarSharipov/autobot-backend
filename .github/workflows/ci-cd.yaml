@@ -173,60 +173,39 @@ jobs:
           cache-to: type=gha,mode=max,scope=migration
 
   deploy:
-    name: Deploy backend to production
+    name: Verify production deployment
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
     needs: [containers]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
       name: production
-      url: ${{ vars.API_PUBLIC_URL }}
+      url: ${{ vars.API_PUBLIC_URL || 'https://autobot.45.131.135.15.sslip.io' }}
     concurrency:
       group: production-backend
       cancel-in-progress: false
     permissions:
       contents: read
-      packages: read
     env:
-      SERVER_HOST: ${{ secrets.SERVER_HOST }}
-      SERVER_PORT: ${{ secrets.SERVER_PORT }}
-      SERVER_USER: ${{ secrets.SERVER_USER }}
-      SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
-      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
-      SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
-      GHCR_USER: ${{ github.actor }}
-      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      AUTOBOT_API_IMAGE: ${{ needs.containers.outputs.api-image }}
-      AUTOBOT_MIGRATION_IMAGE: ${{ needs.containers.outputs.migration-image }}
-      BUILD_SHA: ${{ github.sha }}
-      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
-      CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
-      WEB_ALLOWED_RETURN_URLS: ${{ vars.WEB_ALLOWED_RETURN_URLS }}
-      AUTOBOT_DB_USER: ${{ vars.AUTOBOT_DB_USER }}
-      AUTOBOT_DB_PASSWORD: ${{ secrets.AUTOBOT_DB_PASSWORD }}
-      AUTOBOT_DB_NAME: ${{ vars.AUTOBOT_DB_NAME }}
-      REDIS_KEY_PREFIX: ${{ vars.REDIS_KEY_PREFIX }}
-      QUEUE_PREFIX: ${{ vars.QUEUE_PREFIX }}
-      TELEGRAM_OIDC_ISSUER: ${{ vars.TELEGRAM_OIDC_ISSUER }}
-      TELEGRAM_OIDC_CLIENT_ID: ${{ vars.TELEGRAM_OIDC_CLIENT_ID }}
-      TELEGRAM_OIDC_CLIENT_SECRET: ${{ secrets.TELEGRAM_OIDC_CLIENT_SECRET }}
-      TELEGRAM_OIDC_REDIRECT_URI: ${{ vars.TELEGRAM_OIDC_REDIRECT_URI }}
-      TELEGRAM_OIDC_SCOPES: ${{ vars.TELEGRAM_OIDC_SCOPES }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      BOT_SERVICE_ACTIVE_KEY_ID: ${{ vars.BOT_SERVICE_ACTIVE_KEY_ID }}
-      BOT_SERVICE_ACTIVE_SECRET: ${{ secrets.BOT_SERVICE_ACTIVE_SECRET }}
-      SESSION_COOKIE_SAME_SITE: ${{ vars.SESSION_COOKIE_SAME_SITE }}
-      PRODUCTION_ENV_FILE: /tmp/autobot-backend.env
+      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL || 'https://autobot.45.131.135.15.sslip.io' }}
+      EXPECTED_SHA: ${{ github.sha }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - name: Wait for server pull deployment
+        shell: bash
+        run: |
+          for _ in {1..60}; do
+            response="$(curl --fail --silent --show-error \
+              "$API_PUBLIC_URL/api/v1/health/ready" || true)"
+            if grep --fixed-strings --quiet "\"version\":\"$EXPECTED_SHA\"" <<<"$response"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production did not report build $EXPECTED_SHA within 10 minutes" >&2
+          exit 1
 
-      - name: Validate and render production environment
-        run: node scripts/ci/render-production-env.mjs "$PRODUCTION_ENV_FILE"
-
-      - name: Install password SSH fallback
-        if: env.SERVER_SSH_KEY == '' && env.SERVER_PASSWORD != ''
-        run: sudo apt-get update && sudo apt-get install --yes sshpass
-
-      - name: Deploy immutable images
-        run: bash scripts/ci/deploy-over-ssh.sh
+      - name: Verify published OpenAPI
+        run: |
+          curl --fail --silent --show-error \
+            "$API_PUBLIC_URL/api/docs-json" \
+            | grep --fixed-strings --quiet '"title":"Autobot Backend API"'

@@ -23,8 +23,15 @@ and must not be removed by either deployment.
 
 ## GitHub Environment
 
-Create the `production` environment in `DinarSharipov/autobot-backend`. Restrict it to the `dev`
-branch and add an approval rule if the repository plan supports it.
+The default deployment does not store SSH or runtime secrets in GitHub. GitHub publishes the
+`:dev` images; `autobot-backend-update.timer` on the server detects a new image revision, applies
+migrations, updates only the backend containers, and keeps the bot project untouched. The GitHub
+production job waits until health reports the pushed commit SHA and then verifies OpenAPI.
+
+Create the `production` environment in `DinarSharipov/autobot-backend`, restrict it to `dev`, and
+optionally set `API_PUBLIC_URL`. The workflow uses the current production URL by default.
+
+The following values are needed only for the retained manual SSH deployment fallback:
 
 Environment secrets:
 
@@ -76,9 +83,11 @@ A push to `dev` additionally publishes two immutable GHCR images tagged with the
 - the API runtime image;
 - the Prisma migration image.
 
-Deployment uploads only Compose definitions and a generated mode-0600 environment file, pulls the
-immutable images, starts PostgreSQL and Redis, runs `prisma migrate deploy`, updates only
-`autobot-api`, and waits for its Docker health check. The deployment never restarts `autobot-bot`.
+The server-side updater pulls the published tags, reads their immutable revision labels, validates
+that the API and migration revisions match, writes the corresponding immutable image references,
+runs `prisma migrate deploy`, updates only `autobot-api`, and waits for its Docker health check. The
+deployment never restarts `autobot-bot`. GitHub marks deployment successful only after production
+health reports the same revision and the live OpenAPI document is available.
 
 ## First deployment prerequisites
 
