@@ -19,6 +19,8 @@ import { INITIAL_PLANS } from '../src/subscriptions/entitlement.types.js';
 import { PlanProvisioningService } from '../src/subscriptions/plan-provisioning.service.js';
 import { UsageService } from '../src/subscriptions/usage.service.js';
 import { IdentityService } from '../src/users/identity.service.js';
+import { GenerationService } from '../src/generation/generation.service.js';
+import { TextGenerationAdapter } from '../src/generation/text-generation.adapter.js';
 import { cleanTestDatabase } from './support/test-database.js';
 
 const BOT_SECRET = 'test-secret-32-bytes-long-1234567890';
@@ -59,6 +61,20 @@ class FakeTelegramChannelAdapter extends TelegramChannelAdapter {
   }
 }
 
+class FakeTextGenerationAdapter extends TextGenerationAdapter {
+  calls = 0;
+
+  generate() {
+    this.calls += 1;
+    return Promise.resolve({
+      text: 'Generated Telegram post',
+      providerRequestId: 'response-test-1',
+      inputUnits: 10,
+      outputUnits: 5,
+    });
+  }
+}
+
 function signedHeaders(input: {
   telegramUserId: string;
   method: string;
@@ -92,12 +108,17 @@ describe('core domain and entitlements', () => {
   let plans: PlanProvisioningService;
   let usage: UsageService;
   let telegram: FakeTelegramChannelAdapter;
+  let generation: GenerationService;
+  let textGeneration: FakeTextGenerationAdapter;
 
   beforeAll(async () => {
     telegram = new FakeTelegramChannelAdapter();
+    textGeneration = new FakeTextGenerationAdapter();
     const moduleReference = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(TelegramChannelAdapter)
       .useValue(telegram)
+      .overrideProvider(TextGenerationAdapter)
+      .useValue(textGeneration)
       .compile();
     app = moduleReference.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configureApplication(app, { swagger: false });
@@ -106,6 +127,7 @@ describe('core domain and entitlements', () => {
     identities = app.get(IdentityService);
     plans = app.get(PlanProvisioningService);
     usage = app.get(UsageService);
+    generation = app.get(GenerationService);
   });
 
   beforeEach(async () => {
@@ -388,6 +410,194 @@ describe('core domain and entitlements', () => {
     expect(await prisma.usageCounter.findFirstOrThrow()).toMatchObject({
       reserved: 1,
       committed: 0,
+    });
+  });
+
+  it('creates an immediate publication once with its text reservation and outbox event', async () => {
+    await user('7001');
+    const channel = await postAs('7001', '/api/v1/channels', {
+      telegramChatId: '-100701',
+    }).expect(201);
+    const channelData = (channel.body as { data: { id: string } }).data;
+    const post = await postAs('7001', '/api/v1/posts', {
+      channelId: channelData.id,
+      prompt: 'Write a concise update',
+      publicationMode: 'AUTO',
+    }).expect(201);
+    const postData = (post.body as { data: { id: string; version: number; status: string } }).data;
+    expect(postData.status).toBe('ACTIVE');
+
+    const path = `/api/v1/posts/${postData.id}/publications`;
+    const key = 'immediate-publication-0001';
+    const first = await request(app.getHttpServer())
+      .post(path)
+      .set(signedHeaders({ telegramUserId: '7001', method: 'POST', path }))
+      .set('If-Match', `"${postData.version}"`)
+      .set('Idempotency-Key', key)
+      .expect(202);
+    const replay = await request(app.getHttpServer())
+      .post(path)
+      .set(signedHeaders({ telegramUserId: '7001', method: 'POST', path }))
+      .set('If-Match', `"${postData.version}"`)
+      .set('Idempotency-Key', key)
+      .expect(202);
+    expect(replay.body).toEqual(first.body);
+
+    const publication = (first.body as { data: { id: string; status: string } }).data;
+    expect(publication.status).toBe('PENDING');
+    expect(await prisma.publication.count({ where: { postId: postData.id } })).toBe(1);
+    expect(
+      await prisma.outboxEvent.findFirstOrThrow({ where: { aggregateId: publication.id } }),
+    ).toMatchObject({
+      eventType: 'publication.generation.requested.v1',
+      status: 'PENDING',
+    });
+    expect(
+      await prisma.usageCounter.findFirstOrThrow({ where: { userId: (await user('7001')).id } }),
+    ).toMatchObject({
+      metric: 'TEXT_GENERATION',
+      reserved: 1,
+      committed: 0,
+    });
+    await generation.generate(publication.id);
+    expect(textGeneration.calls).toBe(1);
+    const completedPublication = await prisma.publication.findUniqueOrThrow({
+      where: { id: publication.id },
+    });
+    expect(completedPublication.status).toBe('READY');
+    expect(typeof completedPublication.selectedVersionId).toBe('string');
+    expect(
+      await prisma.postVersion.findFirstOrThrow({ where: { publicationId: publication.id } }),
+    ).toMatchObject({
+      status: 'APPROVED',
+      text: 'Generated Telegram post',
+    });
+    expect(
+      await prisma.aIRequest.findFirstOrThrow({ where: { publicationId: publication.id } }),
+    ).toMatchObject({
+      provider: 'openai',
+      status: 'SUCCEEDED',
+      providerRequestId: 'response-test-1',
+      inputUnits: 10,
+      outputUnits: 5,
+    });
+    expect(
+      await prisma.usageCounter.findFirstOrThrow({ where: { userId: (await user('7001')).id } }),
+    ).toMatchObject({ reserved: 0, committed: 1 });
+  });
+
+  it('supports moderation approval, rejection and revision with immutable versions', async () => {
+    const account = await user('8001');
+    const pro = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'pro' } });
+    await prisma.subscription.create({
+      data: { userId: account.id, planId: pro.id, status: 'ACTIVE', startsAt: new Date() },
+    });
+    const channel = await postAs('8001', '/api/v1/channels', {
+      telegramChatId: '-100801',
+    }).expect(201);
+    const channelId = (channel.body as { data: { id: string } }).data.id;
+    const post = await postAs('8001', '/api/v1/posts', {
+      channelId,
+      prompt: 'Write a moderated update',
+      publicationMode: 'MODERATION',
+    }).expect(201);
+    const postId = (post.body as { data: { id: string; version: number } }).data.id;
+
+    async function publish(key: string) {
+      const path = `/api/v1/posts/${postId}/publications`;
+      const response = await request(app.getHttpServer())
+        .post(path)
+        .set(signedHeaders({ telegramUserId: '8001', method: 'POST', path }))
+        .set('If-Match', '"1"')
+        .set('Idempotency-Key', key)
+        .expect(202);
+      const publication = (response.body as { data: { id: string } }).data;
+      await generation.generate(publication.id);
+      return publication.id;
+    }
+
+    const firstPublicationId = await publish('moderation-publish-0001');
+    const listPath = '/api/v1/moderation';
+    const pending = await request(app.getHttpServer())
+      .get(listPath)
+      .set(signedHeaders({ telegramUserId: '8001', method: 'GET', path: listPath }))
+      .expect(200);
+    const firstRequest = (pending.body as { data: Array<{ id: string; version: number }> })
+      .data[0]!;
+    expect(firstRequest).toMatchObject({ version: 1 });
+
+    const approvePath = `/api/v1/moderation/${firstRequest.id}/approve`;
+    const approved = await request(app.getHttpServer())
+      .post(approvePath)
+      .set(signedHeaders({ telegramUserId: '8001', method: 'POST', path: approvePath }))
+      .set('If-Match', '"1"')
+      .set('Idempotency-Key', 'moderation-approve-0001')
+      .expect(202);
+    expect((approved.body as { data: { id: string; status: string } }).data).toMatchObject({
+      id: firstPublicationId,
+      status: 'READY',
+    });
+
+    const secondPublicationId = await publish('moderation-publish-0002');
+    const secondPending = await request(app.getHttpServer())
+      .get(listPath)
+      .set(signedHeaders({ telegramUserId: '8001', method: 'GET', path: listPath }))
+      .expect(200);
+    const secondRequest = (secondPending.body as { data: Array<{ id: string; version: number }> })
+      .data[0]!;
+    const revisionPath = `/api/v1/moderation/${secondRequest.id}/revision`;
+    const revised = await request(app.getHttpServer())
+      .post(revisionPath)
+      .set(
+        signedHeaders({
+          telegramUserId: '8001',
+          method: 'POST',
+          path: revisionPath,
+          body: JSON.stringify({ feedback: 'Сделай текст короче' }),
+        }),
+      )
+      .set('If-Match', '"1"')
+      .set('Idempotency-Key', 'moderation-revision-0001')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ feedback: 'Сделай текст короче' }));
+    expect(revised.status).toBe(202);
+    expect((revised.body as { data: { id: string; status: string } }).data).toMatchObject({
+      id: secondPublicationId,
+      status: 'PENDING',
+    });
+    expect(await prisma.postVersion.count({ where: { publicationId: secondPublicationId } })).toBe(
+      1,
+    );
+    await generation.generate(secondPublicationId);
+    expect(await prisma.postVersion.count({ where: { publicationId: secondPublicationId } })).toBe(
+      2,
+    );
+    expect(
+      await prisma.postVersion.findFirstOrThrow({
+        where: { publicationId: secondPublicationId },
+        orderBy: { sequence: 'asc' },
+      }),
+    ).toMatchObject({ status: 'SUPERSEDED' });
+    expect(
+      await prisma.moderationRequest.count({ where: { publicationId: secondPublicationId } }),
+    ).toBe(2);
+
+    const afterRevision = await request(app.getHttpServer())
+      .get(listPath)
+      .set(signedHeaders({ telegramUserId: '8001', method: 'GET', path: listPath }))
+      .expect(200);
+    const currentRequest = (afterRevision.body as { data: Array<{ id: string; version: number }> })
+      .data[0]!;
+    const rejectPath = `/api/v1/moderation/${currentRequest.id}/reject`;
+    const rejected = await request(app.getHttpServer())
+      .post(rejectPath)
+      .set(signedHeaders({ telegramUserId: '8001', method: 'POST', path: rejectPath }))
+      .set('If-Match', '"1"')
+      .set('Idempotency-Key', 'moderation-reject-0001')
+      .expect(200);
+    expect((rejected.body as { data: { id: string; status: string } }).data).toMatchObject({
+      id: secondPublicationId,
+      status: 'CANCELLED',
     });
   });
 });

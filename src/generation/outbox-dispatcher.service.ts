@@ -1,0 +1,127 @@
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Job, Queue } from 'bullmq';
+
+import type { AppEnvironment } from '../config/environment.js';
+import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
+import { type PostGenerationJobPayload } from '../infrastructure/queue/job-contracts.js';
+import { QUEUE_NAMES } from '../infrastructure/queue/queue.constants.js';
+import { GenerationService } from './generation.service.js';
+import { TextGenerationProviderError } from './text-generation.adapter.js';
+
+@Injectable()
+export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(OutboxDispatcherService.name);
+  private timer: NodeJS.Timeout | undefined;
+  private dispatching = false;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppEnvironment, true>,
+    @InjectQueue(QUEUE_NAMES.postGeneration)
+    private readonly generationQueue: Queue<PostGenerationJobPayload>,
+  ) {}
+
+  onModuleInit(): void {
+    this.timer = setInterval(
+      () => void this.dispatchPending(),
+      this.config.get('OUTBOX_POLL_INTERVAL_MS', { infer: true }),
+    );
+    void this.dispatchPending();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  async dispatchPending(): Promise<void> {
+    if (this.dispatching) return;
+    this.dispatching = true;
+    try {
+      const events = await this.prisma.outboxEvent.findMany({
+        where: {
+          status: 'PENDING',
+          availableAt: { lte: new Date() },
+          eventType: 'publication.generation.requested.v1',
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      });
+      for (const event of events) await this.dispatch(event.id);
+    } finally {
+      this.dispatching = false;
+    }
+  }
+
+  private async dispatch(eventId: string): Promise<void> {
+    const claimed = await this.prisma.outboxEvent.updateMany({
+      where: { id: eventId, status: 'PENDING', availableAt: { lte: new Date() } },
+      data: { status: 'PROCESSING', lockedAt: new Date(), attempts: { increment: 1 } },
+    });
+    if (!claimed.count) return;
+    const event = await this.prisma.outboxEvent.findUniqueOrThrow({ where: { id: eventId } });
+    const payload = event.payload as { schemaVersion?: unknown; publicationId?: unknown };
+    if (payload.schemaVersion !== 1 || typeof payload.publicationId !== 'string') {
+      await this.prisma.outboxEvent.updateMany({
+        where: { id: eventId },
+        data: { status: 'FAILED', lastErrorCode: 'INVALID_OUTBOX_PAYLOAD' },
+      });
+      return;
+    }
+    try {
+      await this.generationQueue.add(
+        'generate-post',
+        { schemaVersion: 1, publicationId: payload.publicationId },
+        {
+          jobId: `generation:${event.id}`,
+          attempts: this.config.get('PUBLICATION_MAX_ATTEMPTS', { infer: true }),
+          backoff: { type: 'exponential', delay: 1000 },
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        },
+      );
+      await this.prisma.outboxEvent.updateMany({
+        where: { id: eventId },
+        data: { status: 'PUBLISHED', processedAt: new Date() },
+      });
+    } catch (error) {
+      await this.prisma.outboxEvent.updateMany({
+        where: { id: eventId },
+        data: {
+          status: 'PENDING',
+          availableAt: new Date(Date.now() + 5000),
+          lastErrorCode: 'QUEUE_UNAVAILABLE',
+        },
+      });
+      this.logger.warn({
+        event: 'outbox_dispatch_failed',
+        outboxEventId: eventId,
+        error: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
+  }
+}
+
+@Processor(QUEUE_NAMES.postGeneration, { concurrency: 2 })
+export class PostGenerationProcessor extends WorkerHost {
+  constructor(private readonly generation: GenerationService) {
+    super();
+  }
+
+  async process(job: Job<PostGenerationJobPayload>): Promise<void> {
+    try {
+      await this.generation.generate(job.data.publicationId);
+    } catch (error) {
+      if (
+        error instanceof TextGenerationProviderError &&
+        error.retryable &&
+        job.attemptsMade + 1 >= (job.opts.attempts ?? 1)
+      ) {
+        await this.generation.failAfterRetries(job.data.publicationId, error.code);
+        return;
+      }
+      throw error;
+    }
+  }
+}

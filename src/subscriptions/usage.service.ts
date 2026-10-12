@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 
-import { type UsageEntryKind, type UsageMetric } from '../generated/prisma/client.js';
+import { type Prisma, type UsageEntryKind, type UsageMetric } from '../generated/prisma/client.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { serializableTransaction } from '../common/database/serializable-transaction.js';
 import { ApiHttpException } from '../common/http/api-http.exception.js';
@@ -75,66 +75,74 @@ export class UsageService {
       );
     }
 
-    return serializableTransaction(this.prisma, async (transaction) => {
-      const period = this.period(input.at);
-      const effective = await this.entitlements.resolve(input.userId, transaction);
-      if (input.kind === 'RESERVE') {
-        this.entitlements.assertMetricEnabled(effective.entitlements, input.metric);
-      }
-      const limit = this.entitlements.usageLimit(effective.entitlements, input.metric);
-      const counter = await transaction.usageCounter.upsert({
-        where: {
-          userId_metric_periodStart: {
-            userId: input.userId,
-            metric: input.metric,
-            periodStart: period.start,
-          },
-        },
-        create: {
+    if (input.database) return this.mutateInTransaction(input.database, input);
+    return serializableTransaction(this.prisma, (transaction) =>
+      this.mutateInTransaction(transaction, input),
+    );
+  }
+
+  private async mutateInTransaction(
+    transaction: Prisma.TransactionClient,
+    input: UsageMutation & { kind: UsageEntryKind },
+  ): Promise<UsageItemView> {
+    const period = this.period(input.at);
+    const effective = await this.entitlements.resolve(input.userId, transaction);
+    if (input.kind === 'RESERVE') {
+      this.entitlements.assertMetricEnabled(effective.entitlements, input.metric);
+    }
+    const limit = this.entitlements.usageLimit(effective.entitlements, input.metric);
+    const counter = await transaction.usageCounter.upsert({
+      where: {
+        userId_metric_periodStart: {
           userId: input.userId,
           metric: input.metric,
           periodStart: period.start,
-          periodEnd: period.end,
         },
-        update: {},
-      });
-
-      const existing = await transaction.usageLedgerEntry.findUnique({
-        where: {
-          counterId_operationKey: { counterId: counter.id, operationKey: input.operationKey },
-        },
-      });
-      if (existing) {
-        if (existing.kind !== input.kind || existing.amount !== input.amount) {
-          throw new ApiHttpException(
-            HttpStatus.CONFLICT,
-            'USAGE_OPERATION_KEY_REUSED',
-            'The usage operation key was reused with different parameters.',
-          );
-        }
-        return this.item(counter, limit);
-      }
-
-      const changes = this.changes(counter, input.kind, input.amount, limit);
-      const updated = await transaction.usageCounter.update({
-        where: { id: counter.id },
-        data: {
-          reserved: { increment: changes.reserved },
-          committed: { increment: changes.committed },
-          version: { increment: 1 },
-        },
-      });
-      await transaction.usageLedgerEntry.create({
-        data: {
-          counterId: counter.id,
-          kind: input.kind,
-          amount: input.amount,
-          operationKey: input.operationKey,
-          ...(input.metadata ? { metadata: input.metadata } : {}),
-        },
-      });
-      return this.item(updated, limit);
+      },
+      create: {
+        userId: input.userId,
+        metric: input.metric,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+      update: {},
     });
+
+    const existing = await transaction.usageLedgerEntry.findUnique({
+      where: {
+        counterId_operationKey: { counterId: counter.id, operationKey: input.operationKey },
+      },
+    });
+    if (existing) {
+      if (existing.kind !== input.kind || existing.amount !== input.amount) {
+        throw new ApiHttpException(
+          HttpStatus.CONFLICT,
+          'USAGE_OPERATION_KEY_REUSED',
+          'The usage operation key was reused with different parameters.',
+        );
+      }
+      return this.item(counter, limit);
+    }
+
+    const changes = this.changes(counter, input.kind, input.amount, limit);
+    const updated = await transaction.usageCounter.update({
+      where: { id: counter.id },
+      data: {
+        reserved: { increment: changes.reserved },
+        committed: { increment: changes.committed },
+        version: { increment: 1 },
+      },
+    });
+    await transaction.usageLedgerEntry.create({
+      data: {
+        counterId: counter.id,
+        kind: input.kind,
+        amount: input.amount,
+        operationKey: input.operationKey,
+        ...(input.metadata ? { metadata: input.metadata } : {}),
+      },
+    });
+    return this.item(updated, limit);
   }
 
   private changes(
@@ -199,4 +207,5 @@ export type UsageMutation = {
     aiRequestId?: string;
   };
   at?: Date;
+  database?: Prisma.TransactionClient;
 };

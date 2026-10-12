@@ -74,15 +74,11 @@ The bot repository receives the matching key ID/secret through its own secret st
 
 ## AI providers
 
-| Variable                | Required         | Secret | Purpose                                                                                 |
-| ----------------------- | ---------------- | ------ | --------------------------------------------------------------------------------------- |
-| `AI_TEXT_PROVIDER`      | text generation  | no     | Selected provider adapter                                                               |
-| `AI_TEXT_MODEL`         | text generation  | no     | Provider model identifier                                                               |
-| `AI_TEXT_API_KEY`       | text generation  | yes    | Provider credential                                                                     |
-| `AI_IMAGE_PROVIDER`     | image generation | no     | Selected provider adapter                                                               |
-| `AI_IMAGE_MODEL`        | image generation | no     | Provider model identifier                                                               |
-| `AI_IMAGE_API_KEY`      | image generation | yes    | Provider credential; may equal text key operationally but remains separately configured |
-| `AI_REQUEST_TIMEOUT_MS` | no               | no     | Upstream timeout                                                                        |
+| Variable                | Required        | Secret | Purpose                                                                |
+| ----------------------- | --------------- | ------ | ---------------------------------------------------------------------- |
+| `OPEN_API_KEY`          | text generation | yes    | OpenAI API credential; never use a Telegram token or commit this value |
+| `AI_TEXT_MODEL`         | text generation | no     | OpenAI Responses model identifier; defaults to `gpt-5-mini`            |
+| `AI_REQUEST_TIMEOUT_MS` | no              | no     | Upstream timeout                                                       |
 
 Provider-specific optional settings use a documented adapter prefix and must not leak into domain contracts.
 

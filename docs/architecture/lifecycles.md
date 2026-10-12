@@ -4,6 +4,10 @@
 
 `Post` is a content definition; occurrence execution belongs to `Publication`.
 
+The current `POST /posts` command validates its channel/topic and entitlement dependencies and
+creates an `ACTIVE` definition directly. `DRAFT` remains reserved for a later explicit draft
+command; clients must not assume that creating a post produces an unpublished draft.
+
 ```text
 DRAFT -> ACTIVE -> ARCHIVED
   |         |

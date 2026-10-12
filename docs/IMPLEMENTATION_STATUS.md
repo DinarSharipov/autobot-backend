@@ -4,6 +4,12 @@
 
 Stages 1–4 are complete: contracts, backend foundation, bot service access, and core
 domain/entitlements are runtime-verified.
+Stage 5 is in progress: post definitions and immediate publication occurrences use an atomic
+text-usage reservation and durable outbox event. The OpenAI text adapter and generation worker
+persist immutable versions plus content-free accounting metadata. Moderation approval, rejection,
+and revision requests now use optimistic versions, idempotent commands, immutable replacement
+versions, and durable generation dispatch; live provider execution still requires an API account
+with available quota. Scheduling and Telegram delivery remain the following slices.
 Telegram OIDC activation and browser sessions are intentionally deferred until the core Telegram
 bot workflow is complete. Bot-only production runs without OIDC credentials; browser login
 endpoints remain implemented but return `503 TELEGRAM_OIDC_NOT_CONFIGURED` until the final Web
@@ -76,8 +82,8 @@ Telegram channel.
 - [x] Users/AuthIdentity module
 - [x] Channels module
 - [x] Topics module
-- [ ] Posts/versioning module
-- [ ] Moderation module
+- [x] Posts/versioning module (post definitions, immediate occurrence and version-history read API)
+- [x] Moderation module (approval, rejection, revision, shared queue state)
 - [ ] Scheduling module
 - [ ] Publishing module
 - [ ] AI adapters

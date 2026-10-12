@@ -10,8 +10,11 @@ import { ApiExceptionFilter } from './common/http/api-exception.filter.js';
 import { RequestLoggingInterceptor } from './common/http/request-logging.interceptor.js';
 import { validateEnvironment } from './config/environment.js';
 import { HealthModule } from './health/health.module.js';
+import { GenerationModule } from './generation/generation.module.js';
 import { ChannelsModule } from './channels/channels.module.js';
 import { ImageTempModule } from './infrastructure/image-temp/image-temp.module.js';
+import { PostsModule } from './posts/posts.module.js';
+import { ModerationModule } from './moderation/moderation.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { QueueModule } from './infrastructure/queue/queue.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
@@ -35,6 +38,9 @@ import { TopicsModule } from './topics/topics.module.js';
     SubscriptionsModule,
     ChannelsModule,
     TopicsModule,
+    PostsModule,
+    ModerationModule,
+    GenerationModule,
     HealthModule,
   ],
   controllers: [AppController],
