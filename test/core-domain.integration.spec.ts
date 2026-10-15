@@ -478,7 +478,7 @@ describe('core domain and entitlements', () => {
     expect(
       await prisma.aIRequest.findFirstOrThrow({ where: { publicationId: publication.id } }),
     ).toMatchObject({
-      provider: 'openai',
+      provider: 'gptunnel',
       status: 'SUCCEEDED',
       providerRequestId: 'response-test-1',
       inputUnits: 10,

@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
 
+import { GptunnelModule } from '../infrastructure/gptunnel/gptunnel.module.js';
+
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module.js';
 import { GenerationService } from './generation.service.js';
-import { OpenAiTextGenerationAdapter } from './openai-text-generation.adapter.js';
+import { GptunnelTextGenerationAdapter } from './gptunnel-text-generation.adapter.js';
 import { OutboxDispatcherService, PostGenerationProcessor } from './outbox-dispatcher.service.js';
 import { TextGenerationAdapter } from './text-generation.adapter.js';
 
 @Module({
-  imports: [SubscriptionsModule],
+  imports: [SubscriptionsModule, GptunnelModule],
   providers: [
     GenerationService,
-    OpenAiTextGenerationAdapter,
-    { provide: TextGenerationAdapter, useExisting: OpenAiTextGenerationAdapter },
+    GptunnelTextGenerationAdapter,
+    { provide: TextGenerationAdapter, useExisting: GptunnelTextGenerationAdapter },
     OutboxDispatcherService,
     PostGenerationProcessor,
   ],

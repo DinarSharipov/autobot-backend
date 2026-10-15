@@ -69,9 +69,25 @@ const environmentSchema = z
       .int()
       .min(1)
       .default(500 * 1024 * 1024),
-    OPEN_API_KEY: optionalNonEmptyString,
-    AI_TEXT_MODEL: z.string().min(1).max(128).default('gpt-5-mini'),
-    AI_IMAGE_MODEL: z.string().min(1).max(128).default('gpt-image-1'),
+    GPTUNNEL_API_KEY: optionalNonEmptyString,
+    GPTUNNEL_USE_WALLET_BALANCE: environmentBoolean.default(false),
+    GPTUNNEL_IMAGE_PARAMS: z.preprocess(
+      (value) => {
+        if (value === undefined || value === '') return {};
+        if (typeof value !== 'string') return value;
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          return null;
+        }
+      },
+      z.record(z.string(), z.union([z.string(), z.number().finite(), z.boolean()])),
+    ),
+    AI_TEXT_MODEL: z.string().min(1).max(128).default('gpt-4o-mini'),
+    AI_IMAGE_MODEL: z.string().min(1).max(128).default('gpt-image'),
+    AI_TEXT_MAX_TOKENS: z.coerce.number().int().min(128).max(32768).default(4096),
+    AI_IMAGE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(180_000),
+    AI_IMAGE_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(10_000).default(2000),
     AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
     TELEGRAM_OIDC_ISSUER: z.url().default('https://oauth.telegram.org'),
     TELEGRAM_OIDC_CLIENT_ID: optionalNonEmptyString,

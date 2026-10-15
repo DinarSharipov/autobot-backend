@@ -2,6 +2,8 @@ export type TextGenerationInput = {
   prompt: string;
   topicPromptTemplate: string | null;
   revisionFeedback?: string | null;
+  previousText?: string | null;
+  maxCharacters?: number;
   idempotencyKey: string;
 };
 
@@ -20,6 +22,7 @@ export class TextGenerationProviderError extends Error {
   constructor(
     readonly code: string,
     readonly retryable: boolean,
+    readonly retryAfterSeconds?: number,
   ) {
     super(code);
   }

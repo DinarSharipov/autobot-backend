@@ -2,8 +2,9 @@ process.env.NODE_ENV = 'test';
 process.env.PORT = '3001';
 process.env.API_PUBLIC_URL = 'http://localhost:3001';
 process.env.DATABASE_URL =
+  process.env.AUTOBOT_TEST_DATABASE_URL ??
   'postgresql://autobot:autobot@localhost:5432/autobot_test?schema=public&connect_timeout=5';
-process.env.REDIS_URL = 'redis://localhost:6380/15';
+process.env.REDIS_URL = process.env.AUTOBOT_TEST_REDIS_URL ?? 'redis://localhost:6380/15';
 process.env.REDIS_KEY_PREFIX = 'autobot:test';
 process.env.QUEUE_PREFIX = 'autobot:test';
 process.env.IMAGE_TEMP_DIR = '.tmp/test-images';

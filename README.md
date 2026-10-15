@@ -66,6 +66,33 @@ same bot that will publish posts. The API verifies that the target is a channel 
 an administrator allowed to post; development without the token returns a safe `503` for these
 operations.
 
+## GPTunnel generation
+
+Configure `GPTUNNEL_API_KEY` in the backend environment. `OPEN_API_KEY` is no longer used;
+replace it with a GPTunnel key (an OpenAI key will not work).
+
+- Text uses [Chat Completions](https://docs.gptunnel.ru/api/chat-completions/), including topic
+  guidance and the previous final post plus feedback for revisions.
+- Images use [Creative Lab v2 tasks](https://docs.gptunnel.ru/creative-lab/create-task/),
+  polled until ready and downloaded immediately before Telegram publication.
+- Choose `AI_TEXT_MODEL` from `GET https://gptunnel.ru/v1/models` and `AI_IMAGE_MODEL` from
+  `GET https://gptunnel.ru/api/v2/media/models?type=IMAGE`, authenticated with your key.
+  Defaults are `gpt-4o-mini` and `gpt-image`; availability depends on your account/key.
+  Image generation checks the catalogue before creating a task.
+- Keep `GPTUNNEL_IMAGE_PARAMS={}` to use model defaults, or supply a JSON object containing
+  parameters from the selected model's catalogue schema. Use a text-to-image model that
+  does not require input files.
+- `GPTUNNEL_USE_WALLET_BALANCE=true` enables personal-wallet billing for text only.
+  Creative Lab uses its documented business-account API; this flag is not sent to media tasks.
+- Image posts generate at most 1024 characters for Telegram captions; text-only posts use 4096.
+  Empty, truncated, filtered and oversized completions are rejected before publication.
+
+Use the existing post API: create `POST /api/v1/posts` with `prompt`, `channelId`,
+`publicationMode` (`AUTO` or `MODERATION`) and optional `generateImage: true`, then request
+`POST /api/v1/posts/:postId/publications` or create a schedule. Authentication, `If-Match`,
+idempotency and subscription limits still apply. Images are generated only after text is
+approved/ready. See [the integration notes](docs/architecture/gptunnel.md) for errors and retry semantics.
+
 ## Database workflow
 
 Create a migration after changing `prisma/schema.prisma`:
@@ -84,7 +111,8 @@ The application provisions the version-controlled `free` and `pro` plans idempot
 The default `free` plan applies when a user has no currently effective `ACTIVE` or `TRIALING`
 subscription.
 
-Integration tests use the separate `autobot_test` database. The cleanup helper refuses to
+Integration tests use the separate `autobot_test` database. Optional `AUTOBOT_TEST_DATABASE_URL`
+and `AUTOBOT_TEST_REDIS_URL` select isolated local services on non-default ports. The cleanup helper refuses to
 operate unless the database name ends with `_test`.
 
 ## Verification

@@ -40,6 +40,14 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     if (this.dispatching) return;
     this.dispatching = true;
     try {
+      await this.prisma.outboxEvent.updateMany({
+        where: {
+          status: 'PROCESSING',
+          eventType: 'publication.generation.requested.v1',
+          lockedAt: { lt: new Date(Date.now() - 60_000) },
+        },
+        data: { status: 'PENDING', lockedAt: null },
+      });
       const events = await this.prisma.outboxEvent.findMany({
         where: {
           status: 'PENDING',
@@ -50,6 +58,11 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
         take: 50,
       });
       for (const event of events) await this.dispatch(event.id);
+    } catch (error) {
+      this.logger.warn({
+        event: 'outbox_poll_failed',
+        error: error instanceof Error ? error.name : 'UnknownError',
+      });
     } finally {
       this.dispatching = false;
     }
@@ -79,9 +92,9 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
         'generate-post',
         { schemaVersion: 1, publicationId: payload.publicationId },
         {
-          jobId: `generation:${event.id}`,
+          jobId: `generation-${event.id}`,
           attempts: this.config.get('PUBLICATION_MAX_ATTEMPTS', { infer: true }),
-          backoff: { type: 'exponential', delay: 1000 },
+          backoff: { type: 'gptunnel', delay: 1000 },
           removeOnComplete: 1000,
           removeOnFail: 1000,
         },
@@ -108,7 +121,16 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
   }
 }
 
-@Processor(QUEUE_NAMES.postGeneration, { concurrency: 2 })
+@Processor(QUEUE_NAMES.postGeneration, {
+  concurrency: 2,
+  settings: {
+    backoffStrategy: (attemptsMade: number, _type?: string, error?: Error) =>
+      Math.max(
+        Math.min(3_600_000, 1000 * 2 ** Math.max(0, attemptsMade - 1)),
+        error instanceof TextGenerationProviderError ? (error.retryAfterSeconds ?? 0) * 1000 : 0,
+      ),
+  },
+})
 export class PostGenerationProcessor extends WorkerHost {
   constructor(
     private readonly generation: GenerationService,
@@ -120,7 +142,10 @@ export class PostGenerationProcessor extends WorkerHost {
   async process(job: Job<PostGenerationJobPayload>): Promise<void> {
     const startedAt = performance.now();
     try {
-      await this.generation.generate(job.data.publicationId);
+      await this.generation.generate(
+        job.data.publicationId,
+        job.attemptsMade > 0 || job.stalledCounter > 0,
+      );
       this.metrics.increment('autobot_queue_jobs_total', {
         queue: QUEUE_NAMES.postGeneration,
         status: 'completed',

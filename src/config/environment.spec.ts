@@ -9,6 +9,23 @@ const validEnvironment = {
 };
 
 describe('validateEnvironment', () => {
+  it('validates GPTunnel configuration without falling back to an OpenAI credential', () => {
+    const environment = validateEnvironment({
+      ...validEnvironment,
+      OPEN_API_KEY: 'retired-key',
+      GPTUNNEL_USE_WALLET_BALANCE: 'true',
+      GPTUNNEL_IMAGE_PARAMS: '{"aspect_ratio":"1:1","quality":2}',
+    });
+    expect(environment.GPTUNNEL_API_KEY).toBeUndefined();
+    expect(environment.GPTUNNEL_USE_WALLET_BALANCE).toBe(true);
+    expect(environment.GPTUNNEL_IMAGE_PARAMS).toEqual({ aspect_ratio: '1:1', quality: 2 });
+    for (const value of ['not-json', '[]', '{"nested":{}}']) {
+      expect(() =>
+        validateEnvironment({ ...validEnvironment, GPTUNNEL_IMAGE_PARAMS: value }),
+      ).toThrow('GPTUNNEL_IMAGE_PARAMS');
+    }
+  });
+
   it('applies safe defaults and parses numeric values', () => {
     const environment = validateEnvironment({ ...validEnvironment, PORT: '3100' });
 

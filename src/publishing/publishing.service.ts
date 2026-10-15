@@ -29,6 +29,15 @@ const RETRYABLE_CODES = new Set([
   'AI_IMAGE_PROVIDER_RATE_LIMITED',
   'AI_IMAGE_TEMP_STORAGE_UNAVAILABLE',
   'AI_IMAGE_DOWNLOAD_FAILED',
+  'AI_IMAGE_PROVIDER_TIMEOUT',
+  'AI_PROVIDER_TIMEOUT',
+  'AI_PROVIDER_NETWORK_ERROR',
+  'AI_PROVIDER_RATE_LIMITED',
+  'AI_PROVIDER_HTTP_408',
+  'AI_PROVIDER_HTTP_500',
+  'AI_PROVIDER_HTTP_502',
+  'AI_PROVIDER_HTTP_503',
+  'AI_PROVIDER_HTTP_504',
 ]);
 
 @Injectable()
@@ -306,7 +315,9 @@ export class PublishingService {
     const maxAttempts = this.config.get('PUBLICATION_MAX_ATTEMPTS', { infer: true });
     if (retryable && attemptCount < maxAttempts) {
       const retryAfter =
-        error instanceof TelegramPublicationError ? error.retryAfterSeconds : undefined;
+        error instanceof TelegramPublicationError || error instanceof ImageGenerationProviderError
+          ? error.retryAfterSeconds
+          : undefined;
       const delaySeconds = retryAfter ?? Math.min(3600, 2 ** Math.max(0, attemptCount - 1));
       await this.prisma.publication.updateMany({
         where: { id: publicationId, status: PublicationStatus.PUBLISHING },

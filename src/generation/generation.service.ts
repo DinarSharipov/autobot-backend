@@ -15,6 +15,8 @@ type Claim = {
   prompt: string;
   topicPromptTemplate: string | null;
   revisionFeedback: string | null;
+  previousText: string | null;
+  maxCharacters: number;
   publicationMode: PublicationMode;
   generationSequence: number;
   usageCommitKey: string;
@@ -30,14 +32,16 @@ export class GenerationService {
     private readonly usage: UsageService,
   ) {}
 
-  async generate(publicationId: string): Promise<void> {
-    const claim = await this.claim(publicationId);
+  async generate(publicationId: string, retry = false): Promise<void> {
+    const claim = await this.claim(publicationId, retry);
     if (!claim) return;
     try {
       const result = await this.adapter.generate({
         prompt: claim.prompt,
         topicPromptTemplate: claim.topicPromptTemplate,
         revisionFeedback: claim.revisionFeedback,
+        previousText: claim.previousText,
+        maxCharacters: claim.maxCharacters,
         idempotencyKey: `publication:${claim.publicationId}:text:v${claim.generationSequence}`,
       });
       await this.succeed(claim, result);
@@ -73,6 +77,8 @@ export class GenerationService {
         prompt: '',
         topicPromptTemplate: null,
         revisionFeedback: null,
+        previousText: null,
+        maxCharacters: 4096,
         publicationMode: 'AUTO',
         generationSequence: version.sequence,
         usageCommitKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:commit`,
@@ -82,30 +88,43 @@ export class GenerationService {
     );
   }
 
-  private async claim(publicationId: string): Promise<Claim | null> {
+  private async claim(publicationId: string, retry: boolean): Promise<Claim | null> {
     return serializableTransaction(this.prisma, async (transaction) => {
       const publication = await transaction.publication.findUnique({
         where: { id: publicationId },
         include: { post: { include: { topic: true } } },
       });
-      if (!publication || publication.status !== 'PENDING') return null;
+      if (
+        !publication ||
+        (publication.status !== 'PENDING' && !(retry && publication.status === 'GENERATING'))
+      )
+        return null;
       const updated = await transaction.publication.updateMany({
-        where: { id: publication.id, status: 'PENDING' },
+        where: { id: publication.id, status: publication.status },
         data: { status: 'GENERATING' },
       });
       if (!updated.count) return null;
-      const aiRequest = await transaction.aIRequest.create({
-        data: {
-          userId: publication.post.userId,
-          postId: publication.postId,
-          publicationId,
-          kind: 'TEXT',
-          provider: 'openai',
-          model: this.config.get('AI_TEXT_MODEL', { infer: true }),
-          status: 'RUNNING',
-          startedAt: new Date(),
-        },
-      });
+      const existing = retry
+        ? await transaction.aIRequest.findFirst({
+            where: { publicationId, kind: 'TEXT', status: 'RUNNING' },
+            include: { generatedVersion: true },
+            orderBy: { createdAt: 'desc' },
+          })
+        : null;
+      const aiRequest =
+        existing ??
+        (await transaction.aIRequest.create({
+          data: {
+            userId: publication.post.userId,
+            postId: publication.postId,
+            publicationId,
+            kind: 'TEXT',
+            provider: 'gptunnel',
+            model: this.config.get('AI_TEXT_MODEL', { infer: true }),
+            status: 'RUNNING',
+            startedAt: new Date(),
+          },
+        }));
       const last = await transaction.postVersion.aggregate({
         where: { postId: publication.postId },
         _max: { sequence: true },
@@ -113,18 +132,22 @@ export class GenerationService {
       const revision = await transaction.moderationRequest.findFirst({
         where: { publicationId, status: 'REVISION_REQUESTED' },
         orderBy: { createdAt: 'desc' },
+        include: { postVersion: true },
       });
-      const generationSequence = (last._max.sequence ?? 0) + 1;
+      const generationSequence =
+        existing?.generatedVersion?.sequence ?? (last._max.sequence ?? 0) + 1;
       const revisionUsageSuffix = revision ? `:revision:${revision.version}` : '';
-      const version = await transaction.postVersion.create({
-        data: {
-          postId: publication.postId,
-          publicationId,
-          aiRequestId: aiRequest.id,
-          sequence: generationSequence,
-          status: 'GENERATING',
-        },
-      });
+      const version =
+        existing?.generatedVersion ??
+        (await transaction.postVersion.create({
+          data: {
+            postId: publication.postId,
+            publicationId,
+            aiRequestId: aiRequest.id,
+            sequence: generationSequence,
+            status: 'GENERATING',
+          },
+        }));
       return {
         publicationId,
         aiRequestId: aiRequest.id,
@@ -132,6 +155,8 @@ export class GenerationService {
         prompt: publication.post.prompt,
         topicPromptTemplate: publication.post.topic?.promptTemplate ?? null,
         revisionFeedback: revision?.feedback ?? null,
+        previousText: revision?.postVersion.text ?? null,
+        maxCharacters: publication.post.generateImage ? 1024 : 4096,
         publicationMode: publication.post.publicationMode,
         generationSequence,
         usageCommitKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:commit`,

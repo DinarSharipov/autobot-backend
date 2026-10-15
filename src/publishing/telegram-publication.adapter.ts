@@ -134,7 +134,12 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
           error instanceof Error ? error.message : 'Temporary image file is unavailable.',
         );
       }
-      form.set('photo', new Blob([bytes], { type: 'image/png' }), basename(filePath));
+      const type = filePath.endsWith('.jpg')
+        ? 'image/jpeg'
+        : filePath.endsWith('.webp')
+          ? 'image/webp'
+          : 'image/png';
+      form.set('photo', new Blob([bytes], { type }), basename(filePath));
       response = await fetch(
         `${this.config.get('TELEGRAM_API_BASE_URL', { infer: true })}/bot${token}/sendPhoto`,
         {

@@ -49,6 +49,21 @@ Environment variables:
 - `API_PUBLIC_URL`
 - `BOT_SERVICE_ACTIVE_KEY_ID`
 
+GPTunnel generation configuration:
+
+- Set `GPTUNNEL_API_KEY` on the backend server. Replace the retired `OPEN_API_KEY` setting;
+  OpenAI credentials are not accepted by the new adapters.
+- Set `AI_TEXT_MODEL` and `AI_IMAGE_MODEL` to IDs available to this key in the GPTunnel catalogues.
+- Optionally configure `GPTUNNEL_IMAGE_PARAMS` as a JSON object from the image model schema,
+  `AI_TEXT_MAX_TOKENS`, `AI_REQUEST_TIMEOUT_MS`, `AI_IMAGE_TIMEOUT_MS`, and
+  `AI_IMAGE_POLL_INTERVAL_MS`.
+- `GPTUNNEL_USE_WALLET_BALANCE` applies only to text. Media generation needs a funded account
+  with Creative Lab access.
+- Compose and the manual production-env renderer both pass these settings to the API. The bot
+  and Web Admin must never receive the provider key.
+- Missing credentials leave health endpoints usable; AI requests fail safely with
+  `AI_PROVIDER_NOT_CONFIGURED`.
+
 Optional observability configuration:
 
 - Set `METRICS_ENABLED=true` only when a private monitoring path is available.

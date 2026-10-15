@@ -76,14 +76,21 @@ The bot repository receives the matching key ID/secret through its own secret st
 
 ## AI providers
 
-| Variable                | Required         | Secret | Purpose                                                                |
-| ----------------------- | ---------------- | ------ | ---------------------------------------------------------------------- |
-| `OPEN_API_KEY`          | text generation  | yes    | OpenAI API credential; never use a Telegram token or commit this value |
-| `AI_TEXT_MODEL`         | text generation  | no     | OpenAI Responses model identifier; defaults to `gpt-5-mini`            |
-| `AI_IMAGE_MODEL`        | image generation | no     | OpenAI Images model identifier; defaults to `gpt-image-1`              |
-| `AI_REQUEST_TIMEOUT_MS` | no               | no     | Upstream timeout                                                       |
+| Variable                      | Required      | Secret | Purpose                                                                    |
+| ----------------------------- | ------------- | ------ | -------------------------------------------------------------------------- |
+| `GPTUNNEL_API_KEY`            | AI generation | yes    | GPTunnel credential; sent as the raw Authorization value                   |
+| `GPTUNNEL_USE_WALLET_BALANCE` | no            | no     | Personal-wallet billing for text; defaults to false; not sent to media API |
+| `AI_TEXT_MODEL`               | no            | no     | Chat model ID from `/v1/models`; default `gpt-4o-mini`                     |
+| `AI_IMAGE_MODEL`              | no            | no     | IMAGE model ID from `/api/v2/media/models`; default `gpt-image`            |
+| `GPTUNNEL_IMAGE_PARAMS`       | no            | no     | JSON object of model-specific primitive parameters; default `{}`           |
+| `AI_TEXT_MAX_TOKENS`          | no            | no     | Text response token budget; default 4096                                   |
+| `AI_REQUEST_TIMEOUT_MS`       | no            | no     | Timeout for each provider HTTP request and image download; default 30000   |
+| `AI_IMAGE_TIMEOUT_MS`         | no            | no     | Overall image catalogue/create/poll/download deadline; default 180000      |
+| `AI_IMAGE_POLL_INTERVAL_MS`   | no            | no     | Asynchronous poll interval; default 2000                                   |
 
-Provider-specific optional settings use a documented adapter prefix and must not leak into domain contracts.
+`OPEN_API_KEY` is retired. Configure a GPTunnel key explicitly; no credential fallback or direct
+OpenAI requests remain. Model availability and supported parameters are account-specific; verify
+the authenticated catalogue. See [GPTunnel integration](./gptunnel.md).
 
 ## Local ephemeral image processing
 

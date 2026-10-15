@@ -50,7 +50,7 @@ export class PublicationDispatcherService implements OnModuleInit, OnModuleDestr
           'publish-telegram',
           { schemaVersion: 1, publicationId: publication.id },
           {
-            jobId: `publication:${publication.id}:${publication.updatedAt.getTime()}:${publication.attemptCount + 1}`,
+            jobId: `publication-${publication.id}-${publication.updatedAt.getTime()}-${publication.attemptCount + 1}`,
             removeOnComplete: 1000,
             removeOnFail: 1000,
           },
