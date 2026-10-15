@@ -100,6 +100,14 @@ Web Admin does NOT join these Docker networks because it will run on another ser
 
 PostgreSQL and Redis must never be publicly exposed. Only the required backend HTTPS entry point is public for Web Admin.
 
+## AI provider integration (GPTunnel)
+
+- GPTunnel is the selected AI API provider for Autobot.
+- The authoritative documentation for all AI API integration, request/response formats, authentication, supported models, image generation, errors, and provider-specific behavior is https://docs.gptunnel.ru/.
+- Before implementing or modifying AI integrations, consult the current GPTunnel documentation rather than assuming direct OpenAI API compatibility.
+- Keep GPTunnel integration behind the backend AI provider adapter; the bot and Web Admin must not call the provider directly.
+- Keep provider credentials in environment variables/secrets; never commit them or expose them to clients.
+
 ## Core responsibilities
 
 Backend modules should include:
