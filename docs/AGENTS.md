@@ -49,6 +49,11 @@ The bot and backend are deployed on the same server. The Web Admin is deployed t
 
 Web Admin lives in `DinarSharipov/autobot-web` and is not implemented or deployed from this repository.
 
+Web Admin development, deployment, and activation are currently postponed. The Telegram bot is
+the only active client. Preserve the public API and browser-authentication boundaries for a future
+Web Admin, but do not add Web Admin-specific features or activate its production configuration
+until the product decision is revised.
+
 Backend requirements for Web Admin:
 
 - REST API available over HTTPS

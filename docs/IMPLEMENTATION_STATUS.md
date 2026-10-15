@@ -20,6 +20,9 @@ Telegram OIDC activation and browser sessions are intentionally deferred until t
 bot workflow is complete. Bot-only production runs without OIDC credentials; browser login
 endpoints remain implemented but return `503 TELEGRAM_OIDC_NOT_CONFIGURED` until the final Web
 Admin stage.
+Web Admin development, deployment, and activation are postponed. The Telegram bot is the only
+active client, so production must leave the Web Admin origin and Telegram OIDC credentials unset
+until this product decision changes.
 Live channel validation requires the publishing bot token and administrator access to a real
 Telegram channel.
 

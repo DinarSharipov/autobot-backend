@@ -71,7 +71,8 @@ Optional observability configuration:
   `X-Metrics-Token` header to `/api/v1/internal/metrics`.
 - Do not publish the metrics route through a public monitoring URL or place the token in logs.
 
-Deferred until the final Web Admin stage:
+Web Admin development and deployment are currently postponed. The following configuration remains
+deferred until a future Web Admin stage:
 
 - secret `TELEGRAM_OIDC_CLIENT_SECRET`;
 - variables `CORS_ALLOWED_ORIGINS`, `WEB_ALLOWED_RETURN_URLS`,

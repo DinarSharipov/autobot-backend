@@ -6,6 +6,11 @@ Build the central NestJS backend for Autobot with durable persistence, queue-bas
 
 This repository remains backend-only. The grammY client is developed in `DinarSharipov/autobot`; the React Web Admin is developed and deployed from `DinarSharipov/autobot-web`.
 
+> **Current product scope:** Web Admin development, deployment, and activation are postponed.
+> The Telegram bot is the only active client. Preserve the API and authentication boundaries needed
+> for a future browser client, but do not begin the final Web Admin activation stage until the
+> product decision is revised.
+
 ## Delivery strategy
 
 Implementation is split into dependency-ordered stages. Each stage has its own detailed plan under [`implementation-plans`](./implementation-plans/README.md).
@@ -18,7 +23,7 @@ Implementation is split into dependency-ordered stages. Each stage has its own d
 | 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, subscriptions, and centralized usage enforcement                         |
 | 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Generation, versioning, moderation, scheduling, and idempotent Telegram publication        |
 | 6     | [Production readiness](./implementation-plans/06-production-readiness/IMPLEMENTATION_PLAN.md)                 | Tested CI/CD, secure deployment, monitoring, backup, and operational runbooks              |
-| 7     | Final Web Admin activation                                                                                    | Register Telegram OIDC URLs, configure browser login, CORS, cookies, and live verification |
+| 7     | Final Web Admin activation (postponed)                                                                        | Register Telegram OIDC URLs, configure browser login, CORS, cookies, and live verification |
 
 ## Sequencing rules
 
