@@ -1276,11 +1276,12 @@ components:
     RecurringScheduleCreate:
       type: object
       additionalProperties: false
-      required: [postId, kind, timezone, rrule]
+      required: [postId, kind, timezone, runAt, rrule]
       properties:
         postId: { type: string, format: uuid }
         kind: { type: string, const: RECURRING }
         timezone: { type: string }
+        runAt: { type: string, format: date-time }
         rrule: { type: string }
         misfirePolicy: { type: string, enum: [LATEST_ONLY, SKIP], default: LATEST_ONLY }
         misfireGraceSeconds: { type: integer, minimum: 0, default: 21600 }
