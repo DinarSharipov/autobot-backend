@@ -1,3 +1,4 @@
+import { withoutBackgroundJobs } from './support/without-background-jobs.js';
 import { createHmac, randomUUID } from 'node:crypto';
 
 import { HttpStatus } from '@nestjs/common';
@@ -116,7 +117,9 @@ describe('core domain and entitlements', () => {
   beforeAll(async () => {
     telegram = new FakeTelegramChannelAdapter();
     textGeneration = new FakeTextGenerationAdapter();
-    const moduleReference = await Test.createTestingModule({ imports: [AppModule] })
+    const moduleReference = await withoutBackgroundJobs(
+      Test.createTestingModule({ imports: [AppModule] }),
+    )
       .overrideProvider(TelegramChannelAdapter)
       .useValue(telegram)
       .overrideProvider(TextGenerationAdapter)

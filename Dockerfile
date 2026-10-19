@@ -1,4 +1,4 @@
-FROM node:24-alpine AS dependencies
+FROM node:24.15.0-alpine AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ COPY prisma ./prisma
 COPY src ./src
 RUN npm run build
 
-FROM node:24-alpine AS production-dependencies
+FROM node:24.15.0-alpine AS production-dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --omit=optional && npm cache clean --force
@@ -19,11 +19,11 @@ FROM dependencies AS migration
 WORKDIR /app
 COPY prisma.config.ts ./
 COPY prisma ./prisma
-COPY src/generated ./src/generated
+COPY --from=build /app/src/generated ./src/generated
 COPY scripts/provision-generation-packs.mjs ./scripts/provision-generation-packs.mjs
 CMD ["sh", "-c", "npm run prisma:migrate:deploy && npm run generation-packs:provision"]
 
-FROM node:24-alpine AS runtime
+FROM node:24.15.0-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN addgroup -S autobot && adduser -S autobot -G autobot

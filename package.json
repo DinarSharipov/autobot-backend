@@ -32,7 +32,11 @@
     "generation-packs:provision": "tsx scripts/provision-generation-packs.mjs",
     "docker:up": "docker compose -f compose.yaml -f compose.dev.yaml up -d --build",
     "docker:down": "docker compose -f compose.yaml -f compose.dev.yaml down",
-    "test:acceptance": "vitest run --config vitest.acceptance.config.ts"
+    "test:acceptance": "vitest run --config vitest.acceptance.config.ts",
+    "ci:quality": "bash scripts/ci/quality.sh",
+    "ci:integration": "bash scripts/ci/integration.sh",
+    "verify": "bash scripts/ci/verify-local.sh",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@nestjs/bullmq": "12.0.0",

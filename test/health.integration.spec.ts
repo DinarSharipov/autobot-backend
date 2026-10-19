@@ -1,3 +1,4 @@
+import { withoutBackgroundJobs } from './support/without-background-jobs.js';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -10,7 +11,9 @@ describe('health endpoints', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
-    const moduleReference = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleReference = await withoutBackgroundJobs(
+      Test.createTestingModule({ imports: [AppModule] }),
+    ).compile();
     app = moduleReference.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configureApplication(app, { swagger: false });
     await app.init();

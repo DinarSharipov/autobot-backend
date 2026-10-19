@@ -109,6 +109,17 @@ credentials.
 
 ## Pipeline
 
+Before pushing, install the local hook once with `npm run hooks:install`, then use
+`npm run verify`. The pre-push hook also runs this command. It creates disposable PostgreSQL 17
+and Redis 8 containers on random localhost ports, runs the shared quality/integration gates,
+applies all migrations, provisions the catalogue twice, and builds both deployment images.
+It removes the test containers even on failure. Docker must be running.
+
+CI runs the same `ci:quality` and `ci:integration` scripts and validates both Docker targets
+on every push/PR, including a clean-checkout migration build. Background jobs are disabled in
+domain/auth/health tests; the dedicated pipeline tests exercise real queue consumers.
+Do not consider a push verified until all jobs for its exact commit have completed successfully.
+
 Pushes and pull requests to `dev` run validation and integration checks. They do not change
 production. A production release is started manually with **Actions → Backend CI/CD → Run workflow**
 using the `dev` branch. That run publishes two immutable GHCR images tagged with the selected commit
