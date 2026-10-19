@@ -74,6 +74,7 @@ const environmentSchema = z
     PREPAID_GENERATION_ENABLED: environmentBoolean.default(false),
     YOOKASSA_SHOP_ID: optionalNonEmptyString,
     YOOKASSA_SECRET_KEY: optionalNonEmptyString,
+    YOOKASSA_API_BASE_URL: z.url().default('https://api.yookassa.ru/v3'),
     YOOKASSA_RETURN_URL: optionalUrl,
     GPTUNNEL_IMAGE_PARAMS: z.preprocess(
       (value) => {

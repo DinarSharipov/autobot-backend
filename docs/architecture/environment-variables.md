@@ -90,6 +90,7 @@ The bot repository receives the matching key ID/secret through its own secret st
 | `AI_IMAGE_POLL_INTERVAL_MS`   | no            | no     | Asynchronous poll interval; default 2000                                   |
 | `YOOKASSA_SHOP_ID`            | production    | yes    | YooKassa shop identifier; retained only in the backend runtime             |
 | `YOOKASSA_SECRET_KEY`         | production    | yes    | YooKassa API key; retained only in the backend runtime                     |
+| `YOOKASSA_API_BASE_URL`       | payment test  | no     | YooKassa v3 endpoint; defaults to the official API URL                     |
 | `YOOKASSA_RETURN_URL`         | payment test  | no     | Backend-controlled redirect return URL; redirect never confirms payment    |
 
 `OPEN_API_KEY` is retired. Configure a GPTunnel key explicitly; no credential fallback or direct
