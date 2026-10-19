@@ -129,3 +129,9 @@ price and catalogue version. Documentation does not enable live checkout.
 - [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
   build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
+
+## Detailed purchase delivery tasks
+
+Repository-specific checkout tasks, shared proposed APIs, dependencies and launch preparation are
+tracked in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#purchase-integration-coordination--2026-10-19).
+All purchase implementation and activation items remain pending.

@@ -138,3 +138,12 @@ Telegram channel.
 - [ ] Legacy migration, client integration and new acceptance checks completed.
 
 Existing checked subscription/usage items above describe legacy implementation only. New billing is not deployed.
+
+## Purchase integration planning — 2026-10-19
+
+- [x] Repository responsibilities, shared proposed API, dependencies and launch preparation
+  recorded in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#purchase-integration-coordination--2026-10-19).
+- [ ] Wallets, YooKassa checkout, verified fulfillment, reconciliation and refunds implemented.
+- [ ] Payment acceptance and deployment verified for this repository's scope.
+
+This update is documentation only; no checkout activation or runtime verification is claimed.
