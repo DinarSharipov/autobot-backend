@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run prisma:generate && tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
+    "test:module-graph": "vitest run src/app.module.smoke.spec.ts --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
