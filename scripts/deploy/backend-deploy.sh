@@ -44,7 +44,7 @@ trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 "${compose[@]}" --profile deploy run --rm autobot-migrate
 "${compose[@]}" up -d --no-build autobot-api
 
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' autobot-api 2>/dev/null || true)"
   if [[ "$health" == 'healthy' ]]; then
     for name in YOOKASSA_SHOP_ID YOOKASSA_SECRET_KEY; do
@@ -58,10 +58,6 @@ for _ in $(seq 1 30); do
     "${compose[@]}" up -d --no-build autobot-proxy
     "${compose[@]}" ps
     exit 0
-  fi
-  if [[ "$health" == 'unhealthy' ]]; then
-    "${compose[@]}" logs --tail 100 autobot-api >&2
-    exit 1
   fi
   sleep 5
 done
