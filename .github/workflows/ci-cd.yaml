@@ -219,7 +219,7 @@ jobs:
 
       - name: Deploy backend containers
         env:
-          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-production.env
+          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-yookassa.env
         run: bash scripts/ci/deploy-over-ssh.sh
 
       - name: Wait for server pull deployment
