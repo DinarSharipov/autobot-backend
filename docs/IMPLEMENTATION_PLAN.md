@@ -22,7 +22,7 @@ Implementation is split into dependency-ordered stages. Each stage has its own d
 | 1     | [Contracts and domain design](./implementation-plans/01-contracts-and-domain/IMPLEMENTATION_PLAN.md)          | Approved API, identity, state, scheduling, and data contracts                              |
 | 2     | [Backend foundation](./implementation-plans/02-backend-foundation/IMPLEMENTATION_PLAN.md)                     | Runnable NestJS service with PostgreSQL, Redis, BullMQ, Docker, and baseline observability |
 | 3     | [Identity and access](./implementation-plans/03-identity-and-access/IMPLEMENTATION_PLAN.md)                   | Unified Telegram identity, browser sessions, bot service authentication, and protected API |
-| 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, prepaid wallets, packs, and centralized credit accounting                         |
+| 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, prepaid wallets, packs, and centralized credit accounting                |
 | 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Generation, versioning, moderation, scheduling, and idempotent Telegram publication        |
 | 6     | [Production readiness](./implementation-plans/06-production-readiness/IMPLEMENTATION_PLAN.md)                 | Tested CI/CD, secure deployment, monitoring, backup, and operational runbooks              |
 | 7     | Final Web Admin activation (postponed)                                                                        | Register Telegram OIDC URLs, configure browser login, CORS, cookies, and live verification |
@@ -66,7 +66,7 @@ A stage is complete only when:
 - [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
 - [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
 - [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-  build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
 
 Use [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md) as the billing contract; supersede conflicting legacy tasks above.
@@ -89,6 +89,7 @@ purchase entry point. Keep payment adapters separate from wallet accounting.
 Reference: https://core.telegram.org/bots/payments-stars
 
 Proposed shared contracts (finalize in backend OpenAPI before implementation):
+
 - GET /api/v1/billing/packs: server catalogue, version, credit type, quantity, RUB amount.
 - GET /api/v1/billing/balance: available/reserved TEXT and IMAGE.
 - POST /api/v1/billing/orders: pack ID, catalogue version and stable idempotency key;
@@ -98,57 +99,57 @@ Proposed shared contracts (finalize in backend OpenAPI before implementation):
 - GET /api/v1/billing/ledger: owned credit-operation history.
 - POST /api/v1/billing/webhooks/yookassa: provider notification endpoint, independently verified;
   not protected by bot HMAC or browser session middleware.
-Routes are proposals, not implemented endpoints. Payment status and credit fulfillment status
-must be distinguishable; clients never infer a grant from a redirect or provider status alone.
+  Routes are proposals, not implemented endpoints. Payment status and credit fulfillment status
+  must be distinguishable; clients never infer a grant from a redirect or provider status alone.
 
 ### Backend implementation checklist
 
 - [ ] Finalize DTOs, errors, ownership checks, order/payment/fulfillment state machines and OpenAPI.
 - [ ] Add BillingModule and a provider adapter for YooKassa create/get/refund operations using
-  server-side shopId/secret. Keep external HTTP calls outside database transactions.
+      server-side shopId/secret. Keep external HTTP calls outside database transactions.
 - [ ] Add migrations for packs, TEXT/IMAGE wallets, immutable credit ledger, reservations, orders,
-  payment attempts/events and refunds; amounts are integer kopecks, credits are integer units.
-  Enforce unique provider payment IDs and unique grant/refund operation keys.
+      payment attempts/events and refunds; amounts are integer kopecks, credits are integer units.
+      Enforce unique provider payment IDs and unique grant/refund operation keys.
 - [ ] Snapshot catalogue version, credit type, quantity, amount and currency in each order.
-  Changing catalogue prices must not modify existing orders or purchased credits.
+      Changing catalogue prices must not modify existing orders or purchased credits.
 - [ ] Persist an order/payment-attempt idempotency key before provider calls; reuse it on network
-  timeout/retry. Recover a provider-created payment after a local persistence failure without
-  creating an uncontrolled second charge. Define multiple-attempt and late-success handling.
+      timeout/retry. Recover a provider-created payment after a local persistence failure without
+      creating an uncontrolled second charge. Define multiple-attempt and late-success handling.
 - [ ] Create hosted redirect payments with capture=true and a configured return URL;
-  return confirmation_url to clients. Never save card details or grant from the return URL.
+      return confirmation_url to clients. Never save card details or grant from the return URL.
 - [ ] Durably accept notifications, validate payloads, fetch authoritative payment through
-  authenticated YooKassa API, and match provider account, payment/order association, exact amount,
-  RUB currency and test/live mode. Credit only verified succeeded payments.
+      authenticated YooKassa API, and match provider account, payment/order association, exact amount,
+      RUB currency and test/live mode. Credit only verified succeeded payments.
 - [ ] Atomically mark fulfillment and grant the purchased quantity once; handle duplicate,
-  concurrent, delayed and out-of-order events without regression or double grants.
-  Persist notification/outbox state before HTTP 200; recover failed processing asynchronously.
+      concurrent, delayed and out-of-order events without regression or double grants.
+      Persist notification/outbox state before HTTP 200; recover failed processing asynchronously.
 - [ ] Reconcile pending/unknown payments and paid-but-unfulfilled orders with bounded retries,
-  backoff and operational alerts. A local timeout must not be treated as provider cancellation.
+      backoff and operational alerts. A local timeout must not be treated as provider cancellation.
 - [ ] Notify the owner through a durable outbox/delivery path; failed Telegram notifications must
-  not undo payment or credit fulfillment. Bot restarts must not lose pending orders.
+      not undo payment or credit fulfillment. Bot restarts must not lose pending orders.
 - [ ] Replace monthly quota charging with reserve/commit/release wallet accounting; implement
-  three included successful text revisions per occurrence, separate image charges and one-time
-  3 TEXT + 1 IMAGE gift. Resume blocked occurrences without duplicate generation/debits.
+      three included successful text revisions per occurrence, separate image charges and one-time
+      3 TEXT + 1 IMAGE gift. Resume blocked occurrences without duplicate generation/debits.
 - [ ] Define full/partial refund rules for unused, spent and reserved credits; compensate through
-  immutable linked ledger operations. Reconcile provider refund success/failure and concurrent
-  generation/refund requests; never delete accounting history.
+      immutable linked ledger operations. Reconcile provider refund success/failure and concurrent
+      generation/refund requests; never delete accounting history.
 - [ ] Prepare backend-only YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_RETURN_URL,
-  BILLING_ENABLED and explicit expected test/live mode (names proposed); document in env example,
-  environment validation, Compose and deployment scripts. Never commit actual credentials.
+      BILLING_ENABLED and explicit expected test/live mode (names proposed); document in env example,
+      environment validation, Compose and deployment scripts. Never commit actual credentials.
 - [ ] Configure public HTTPS webhook ingress (443/8443), TLS, proxy routing and provider events
-  payment.succeeded, payment.canceled, refund.succeeded. Keep internal APIs authenticated.
+      payment.succeeded, payment.canceled, refund.succeeded. Keep internal APIs authenticated.
 - [ ] Prepare a minimal return/result endpoint with a back-to-bot link; this does not require
-  Web Admin or browser OIDC. URL parameters are not payment proof and must not expose order data.
+      Web Admin or browser OIDC. URL parameters are not payment proof and must not expose order data.
 - [ ] Prepare runbook: activated merchant account, enabled payment methods, actual commissions,
-  receipt/Мой налог setup for self-employed merchant, service description, support contacts,
-  offer/privacy/refund terms, separate test/live credentials and notification configuration.
+      receipt/Мой налог setup for self-employed merchant, service description, support contacts,
+      offer/privacy/refund terms, separate test/live credentials and notification configuration.
 - [ ] Add meaningful unit/integration/contract cases for success, cancel, timeout, duplicate and
-  forged notifications, wrong owner/amount/currency/mode, concurrent fulfillment, restart,
-  missed notification, refunds and payment-success/notification-failure recovery.
+      forged notifications, wrong owner/amount/currency/mode, concurrent fulfillment, restart,
+      missed notification, refunds and payment-success/notification-failure recovery.
 - [ ] Rehearse migration/rollback with in-flight reservations; no silent old-quota conversion or
-  simultaneous old/new debits. Run required backend checks and test-store end-to-end acceptance.
+      simultaneous old/new debits. Run required backend checks and test-store end-to-end acceptance.
 - [ ] Activate production only after receipt setup, channel decision, compatible bot release,
-  migrations and test evidence are recorded; document a controlled live payment/refund check.
+      migrations and test evidence are recorded; document a controlled live payment/refund check.
 
 Provider references:
 https://yookassa.ru/developers/payment-acceptance/getting-started/payment-process

@@ -24,9 +24,8 @@ global channel/topic caps and occurrence-scoped included text revisions.
 - [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
 - [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
 - [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-  build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
-
 
 ## Exit criteria
 
@@ -160,4 +159,3 @@ Implement the owned resources and policy services required before posts can be g
 - Simple read-then-increment counters can exceed quotas under concurrency.
 - Mixing Telegram transport metadata with domain ownership can make channel migration difficult.
 - Hard-coding plans in controllers would make bot and Web Admin behavior diverge.
-
