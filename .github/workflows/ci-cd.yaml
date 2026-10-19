@@ -109,7 +109,7 @@ jobs:
 
   containers:
     name: Build and publish containers
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
     needs: [quality, integration]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -174,7 +174,7 @@ jobs:
 
   deploy:
     name: Deploy production
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
     needs: [containers]
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -106,19 +106,18 @@ credentials.
 
 ## Pipeline
 
-Pull requests to `dev` run formatting, linting, Prisma/OpenAPI validation, type checking, unit
-tests, integration tests, and the application build.
-
-A push to `dev` additionally publishes two immutable GHCR images tagged with the commit SHA:
+Pushes and pull requests to `dev` run validation and integration checks. They do not change
+production. A production release is started manually with **Actions → Backend CI/CD → Run workflow**
+using the `dev` branch. That run publishes two immutable GHCR images tagged with the selected commit
+SHA:
 
 - the API runtime image;
 - the Prisma migration image.
 
-The server-side updater pulls the published tags, reads their immutable revision labels, validates
-that the API and migration revisions match, writes the corresponding immutable image references,
-runs `prisma migrate deploy`, updates only `autobot-api`, and waits for its Docker health check. The
-deployment never restarts `autobot-bot`. GitHub marks deployment successful only after production
-health reports the same revision and the live OpenAPI document is available.
+The SSH deploy script pulls those immutable SHA references, runs `prisma migrate deploy`, updates only
+`autobot-api`, and waits for its Docker health check. The deployment never restarts `autobot-bot`.
+GitHub marks deployment successful only after production health reports the same revision and the live
+OpenAPI document is available.
 
 ## First deployment prerequisites
 
