@@ -623,7 +623,7 @@ describe('core domain and entitlements', () => {
       timezone: 'UTC',
       runAt,
       misfirePolicy: 'FIRE_ONCE',
-      misfireGraceSeconds: 0,
+      misfireGraceSeconds: 300,
     }).expect(201);
     const scheduleId = (scheduled.body as { data: { id: string; status: string } }).data.id;
     expect((scheduled.body as { data: { status: string } }).data.status).toBe('ACTIVE');
