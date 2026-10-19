@@ -27,6 +27,28 @@ function extension(bytes: Uint8Array): string {
   throw new GptunnelError('AI_IMAGE_INVALID_FORMAT', false);
 }
 
+function isPublicDownloadHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  if (host === '::1' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd'))
+    return false;
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return true;
+  const octets = ipv4.slice(1).map(Number);
+  if (octets.some((value) => value > 255)) return false;
+  const a = octets[0]!;
+  const b = octets[1]!;
+  return !(
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
 @Injectable()
 export class GptunnelImageGenerationAdapter extends ImageGenerationAdapter {
   constructor(
@@ -104,6 +126,8 @@ export class GptunnelImageGenerationAdapter extends ImageGenerationAdapter {
         throw new GptunnelError('AI_IMAGE_INVALID_RESPONSE', false);
       }
       if (parsed.protocol !== 'https:' || parsed.username || parsed.password)
+        throw new GptunnelError('AI_IMAGE_INVALID_RESPONSE', false);
+      if (!isPublicDownloadHost(parsed.hostname))
         throw new GptunnelError('AI_IMAGE_INVALID_RESPONSE', false);
       const bytes = await this.download(parsed, signal);
       const suffix = extension(bytes);

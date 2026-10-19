@@ -190,7 +190,7 @@ export class SchedulesService {
     return serializableTransaction(this.prisma, async (transaction) => {
       const schedule = await transaction.postSchedule.findUnique({
         where: { id: scheduleId },
-        include: { post: true },
+        include: { post: { include: { channel: true, topic: true } } },
       });
       if (
         !schedule ||
@@ -212,14 +212,18 @@ export class SchedulesService {
         });
         return false;
       }
-      const skip =
-        schedule.misfirePolicy === MisfirePolicy.SKIP &&
+      const missedBeyondGrace =
         now.getTime() - scheduledFor.getTime() > schedule.misfireGraceSeconds * 1000;
+      // A one-shot occurrence may fire once only while it is still inside its
+      // configured grace window. Replaying it days later is not FIRE_ONCE.
+      const skip =
+        missedBeyondGrace || (schedule.misfirePolicy === MisfirePolicy.SKIP && now > scheduledFor);
       const publication = await transaction.publication.create({
         data: {
           postId: schedule.postId,
           scheduleId: schedule.id,
           scheduledFor,
+          definition: this.publicationDefinition(schedule.post),
           status: skip ? PublicationStatus.SKIPPED : PublicationStatus.PENDING,
           ...(skip ? { errorCode: 'MISSED_SCHEDULE' } : {}),
         },
@@ -267,7 +271,9 @@ export class SchedulesService {
 
   private async materializeRecurring(
     transaction: Prisma.TransactionClient,
-    schedule: Prisma.PostScheduleGetPayload<{ include: { post: true } }>,
+    schedule: Prisma.PostScheduleGetPayload<{
+      include: { post: { include: { channel: true; topic: true } } };
+    }>,
     now: Date,
   ): Promise<boolean> {
     if (!schedule.runAt || !schedule.rrule) return false;
@@ -298,6 +304,7 @@ export class SchedulesService {
         postId: schedule.postId,
         scheduleId: schedule.id,
         scheduledFor,
+        definition: this.publicationDefinition(schedule.post),
         status: skip ? PublicationStatus.SKIPPED : PublicationStatus.PENDING,
         ...(skip ? { errorCode: 'MISSED_SCHEDULE' } : {}),
       },
@@ -342,6 +349,22 @@ export class SchedulesService {
       },
     });
     return true;
+  }
+
+  private publicationDefinition(post: {
+    prompt: string;
+    generateImage: boolean;
+    publicationMode: string;
+    channel: { telegramChatId: bigint };
+    topic: { promptTemplate: string } | null;
+  }): Prisma.InputJsonValue {
+    return {
+      prompt: post.prompt,
+      generateImage: post.generateImage,
+      publicationMode: post.publicationMode,
+      telegramChatId: post.channel.telegramChatId.toString(),
+      topicPromptTemplate: post.topic?.promptTemplate ?? null,
+    };
   }
 
   private async transition(
@@ -419,7 +442,7 @@ export class SchedulesService {
         'RUN_AT_OFFSET_REQUIRED',
         'runAt must include a UTC offset.',
       );
-    const runAt = new Date(dto.runAt);
+    const runAt = this.parseRunAt(dto.runAt);
     if (Number.isNaN(runAt.getTime()))
       throw new ApiHttpException(
         HttpStatus.UNPROCESSABLE_ENTITY,
@@ -487,13 +510,7 @@ export class SchedulesService {
         'RUN_AT_OFFSET_REQUIRED',
         'runAt must include a UTC offset.',
       );
-    const runAt = dto.runAt === undefined ? undefined : new Date(dto.runAt);
-    if (runAt && Number.isNaN(runAt.getTime()))
-      throw new ApiHttpException(
-        HttpStatus.UNPROCESSABLE_ENTITY,
-        'INVALID_RUN_AT',
-        'runAt must be a valid date-time.',
-      );
+    const runAt = dto.runAt === undefined ? undefined : this.parseRunAt(dto.runAt);
     const kind = current.kind;
     const policy = dto.misfirePolicy ?? current.misfirePolicy;
     if (kind === ScheduleKind.ONCE && policy === MisfirePolicy.LATEST_ONLY)
@@ -542,6 +559,31 @@ export class SchedulesService {
     } catch {
       return false;
     }
+  }
+
+  private parseRunAt(value: string): Date {
+    const date = new Date(value);
+    const match = /^(\d{4})-(\d{2})-(\d{2})T/.exec(value);
+    const calendarValid = match
+      ? (() => {
+          const year = Number(match[1]);
+          const month = Number(match[2]);
+          const day = Number(match[3]);
+          const checked = new Date(Date.UTC(year, month - 1, day));
+          return (
+            checked.getUTCFullYear() === year &&
+            checked.getUTCMonth() === month - 1 &&
+            checked.getUTCDate() === day
+          );
+        })()
+      : false;
+    if (Number.isNaN(date.getTime()) || !calendarValid)
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'INVALID_RUN_AT',
+        'runAt must be a valid date-time.',
+      );
+    return date;
   }
 
   private async assertPost(

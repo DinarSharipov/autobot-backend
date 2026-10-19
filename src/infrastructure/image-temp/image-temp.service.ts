@@ -1,6 +1,6 @@
 import { chmod, mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import { isAbsolute, parse, resolve } from 'node:path';
+import { isAbsolute, parse, relative, resolve } from 'node:path';
 
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +13,7 @@ export class ImageTempService implements OnModuleInit, OnModuleDestroy {
   private readonly ttlSeconds: number;
   private readonly maxBytes: number;
   private readonly maxTotalBytes: number;
+  private pendingBytes = 0;
   private cleanupTimer: NodeJS.Timeout | undefined;
 
   constructor(config: ConfigService<AppEnvironment, true>) {
@@ -60,18 +61,32 @@ export class ImageTempService implements OnModuleInit, OnModuleDestroy {
         // A concurrent cleanup may remove an entry between readdir and stat.
       }
     }
-    if (total + bytes.byteLength > this.maxTotalBytes) {
+    // Keep a process-local reservation while a write is in flight. `wx` alone
+    // protects names, but does not make the preceding capacity check atomic.
+    if (total + this.pendingBytes + bytes.byteLength > this.maxTotalBytes) {
       throw new Error('Temporary image storage is full.');
     }
     const safeExtension = /^\.[a-z0-9]{1,8}$/i.test(extension) ? extension : '.png';
     const path = resolve(this.directory, `${Date.now()}-${randomUUID()}${safeExtension}`);
-    await writeFile(path, bytes, { mode: 0o600, flag: 'wx' });
-    return path;
+    this.pendingBytes += bytes.byteLength;
+    try {
+      await writeFile(path, bytes, { mode: 0o600, flag: 'wx' });
+      return path;
+    } finally {
+      this.pendingBytes -= bytes.byteLength;
+    }
   }
 
   async remove(path: string): Promise<void> {
-    if (!path.startsWith(`${this.directory}${process.platform === 'win32' ? '\\' : '/'}`)) return;
-    await unlink(path).catch(() => undefined);
+    const resolved = resolve(path);
+    const pathWithinDirectory = relative(this.directory, resolved);
+    if (
+      !pathWithinDirectory ||
+      pathWithinDirectory.startsWith('..') ||
+      isAbsolute(pathWithinDirectory)
+    )
+      return;
+    await unlink(resolved).catch(() => undefined);
   }
 
   async cleanupExpired(now = Date.now()): Promise<number> {

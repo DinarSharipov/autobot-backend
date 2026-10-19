@@ -85,28 +85,15 @@ export class UsageService {
     transaction: Prisma.TransactionClient,
     input: UsageMutation & { kind: UsageEntryKind },
   ): Promise<UsageItemView> {
-    const period = this.period(input.at);
     const effective = await this.entitlements.resolve(input.userId, transaction);
     if (input.kind === 'RESERVE') {
       this.entitlements.assertMetricEnabled(effective.entitlements, input.metric);
     }
     const limit = this.entitlements.usageLimit(effective.entitlements, input.metric);
-    const counter = await transaction.usageCounter.upsert({
-      where: {
-        userId_metric_periodStart: {
-          userId: input.userId,
-          metric: input.metric,
-          periodStart: period.start,
-        },
-      },
-      create: {
-        userId: input.userId,
-        metric: input.metric,
-        periodStart: period.start,
-        periodEnd: period.end,
-      },
-      update: {},
-    });
+    const counter =
+      input.kind === 'RESERVE'
+        ? await this.counterForPeriod(transaction, input, this.period(input.at))
+        : await this.counterForSettlement(transaction, input);
 
     const existing = await transaction.usageLedgerEntry.findUnique({
       where: {
@@ -143,6 +130,48 @@ export class UsageService {
       },
     });
     return this.item(updated, limit);
+  }
+
+  private counterForPeriod(
+    transaction: Prisma.TransactionClient,
+    input: UsageMutation,
+    period: { start: Date; end: Date },
+  ) {
+    return transaction.usageCounter.upsert({
+      where: {
+        userId_metric_periodStart: {
+          userId: input.userId,
+          metric: input.metric,
+          periodStart: period.start,
+        },
+      },
+      create: {
+        userId: input.userId,
+        metric: input.metric,
+        periodStart: period.start,
+        periodEnd: period.end,
+      },
+      update: {},
+    });
+  }
+
+  private async counterForSettlement(transaction: Prisma.TransactionClient, input: UsageMutation) {
+    const reservationKey = input.operationKey.replace(/:(?:commit|release)$/, ':reserve');
+    const reservation = await transaction.usageLedgerEntry.findFirst({
+      where: {
+        kind: 'RESERVE',
+        operationKey: reservationKey,
+        counter: { userId: input.userId, metric: input.metric },
+      },
+      include: { counter: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (reservation) return reservation.counter;
+
+    // Preserve the historic error contract when a caller tries to settle a
+    // reservation that does not exist. The normal current-period path is kept
+    // for older callers that do not use reserve/commit key pairs.
+    return this.counterForPeriod(transaction, input, this.period(input.at));
   }
 
   private changes(

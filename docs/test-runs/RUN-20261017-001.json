@@ -1,0 +1,1330 @@
+{
+  "runId": "RUN-20261017-001",
+  "date": "2026-10-17",
+  "timezone": "Europe/Moscow",
+  "baseCommit": "b43d8986829e0dcf36229e3dfe4a43980c04c8ba",
+  "environment": {
+    "node": "24.15.0",
+    "postgres": "14.19",
+    "redis": "8.0.0",
+    "database": "autobot_acceptance_test",
+    "host": "loopback",
+    "providerHttp": "mocked",
+    "productionChanged": false,
+    "liveCalls": 0
+  },
+  "scope": "First acceptance tranche; not the full 667-case catalogue",
+  "existingAutomation": {
+    "unitPassed": 60,
+    "unitFailed": 0,
+    "integrationPassed": 27,
+    "integrationFailed": 0
+  },
+  "acceptanceAssertions": {
+    "total": 126,
+    "passed": 118,
+    "failed": 8
+  },
+  "catalog": {
+    "total": 667,
+    "executed": 101,
+    "passed": 93,
+    "failed": 8,
+    "notRun": 566
+  },
+  "observations": [
+    {
+      "caseId": "TC-USG-015",
+      "publicationStatus": "FAILED",
+      "errorCode": "TELEGRAM_API_UNAVAILABLE",
+      "attemptCount": 1,
+      "imageUsage": {
+        "metric": "IMAGE_GENERATION",
+        "committed": 0,
+        "reserved": 0,
+        "limit": 100
+      },
+      "photoCalls": 0
+    },
+    {
+      "caseId": "TC-USG-014",
+      "publicationStatus": "PUBLISHING",
+      "errorCode": "TELEGRAM_RATE_LIMIT",
+      "attemptCount": 2,
+      "imageUsage": {
+        "metric": "IMAGE_GENERATION",
+        "committed": 1,
+        "reserved": 0,
+        "limit": 100
+      },
+      "photoCalls": 1
+    },
+    {
+      "caseId": "TC-USG-016",
+      "publicationStatus": "RETRY_WAIT",
+      "errorCode": "TELEGRAM_RATE_LIMIT",
+      "attemptCount": 1,
+      "imageUsage": {
+        "metric": "IMAGE_GENERATION",
+        "committed": 1,
+        "reserved": 0,
+        "limit": 100
+      },
+      "photoCalls": 1,
+      "httpStatus": 409
+    },
+    {
+      "caseId": "TC-SCH-017",
+      "publicationStatus": "READY",
+      "errorCode": null,
+      "attemptCount": 0,
+      "imageUsage": {
+        "metric": "IMAGE_GENERATION",
+        "committed": 0,
+        "reserved": 0,
+        "limit": 100
+      },
+      "photoCalls": 0,
+      "occurrenceStatus": "PENDING",
+      "outboxCount": 1
+    }
+  ],
+  "cases": [
+    {
+      "id": "TC-BND-001",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-001 PATCH /channels/:id: title, длина 0 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-002",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-002 PATCH /channels/:id: title, длина 1 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-003",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-003 PATCH /channels/:id: title, длина 254 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-004",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-004 PATCH /channels/:id: title, длина 255 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-005",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-005 PATCH /channels/:id: title, длина 256 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-006",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-006 POST/PATCH /topics: name, длина 0 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-006 POST/PATCH /topics: name, длина 0 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-007",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-007 POST/PATCH /topics: name, длина 1 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-007 POST/PATCH /topics: name, длина 1 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-008",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-008 POST/PATCH /topics: name, длина 254 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-008 POST/PATCH /topics: name, длина 254 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-009",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-009 POST/PATCH /topics: name, длина 255 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-009 POST/PATCH /topics: name, длина 255 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-010",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-010 POST/PATCH /topics: name, длина 256 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-010 POST/PATCH /topics: name, длина 256 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-011",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-011 POST/PATCH /topics: promptTemplate, длина 0 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-011 POST/PATCH /topics: promptTemplate, длина 0 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-012",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-012 POST/PATCH /topics: promptTemplate, длина 1 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-012 POST/PATCH /topics: promptTemplate, длина 1 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-013",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-013 POST/PATCH /topics: promptTemplate, длина 19999 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-013 POST/PATCH /topics: promptTemplate, длина 19999 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-014",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-014 POST/PATCH /topics: promptTemplate, длина 20000 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-014 POST/PATCH /topics: promptTemplate, длина 20000 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-015",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-015 POST/PATCH /topics: promptTemplate, длина 20001 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-015 POST/PATCH /topics: promptTemplate, длина 20001 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-016",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-016 POST/PATCH /topics: description, длина 0 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-016 POST/PATCH /topics: description, длина 0 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-017",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-017 POST/PATCH /topics: description, длина 1 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-017 POST/PATCH /topics: description, длина 1 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-018",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-018 POST/PATCH /topics: description, длина 1999 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-018 POST/PATCH /topics: description, длина 1999 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-019",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-019 POST/PATCH /topics: description, длина 2000 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-019 POST/PATCH /topics: description, длина 2000 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-020",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-020 POST/PATCH /topics: description, длина 2001 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-020 POST/PATCH /topics: description, длина 2001 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-021",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-021 POST/PATCH /posts: prompt, длина 0 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-021 POST/PATCH /posts: prompt, длина 0 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-022",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-022 POST/PATCH /posts: prompt, длина 1 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-022 POST/PATCH /posts: prompt, длина 1 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-023",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-023 POST/PATCH /posts: prompt, длина 19999 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-023 POST/PATCH /posts: prompt, длина 19999 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-024",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-024 POST/PATCH /posts: prompt, длина 20000 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-024 POST/PATCH /posts: prompt, длина 20000 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-025",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-025 POST/PATCH /posts: prompt, длина 20001 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-025 POST/PATCH /posts: prompt, длина 20001 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-026",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-BND-026 POST/PATCH /posts: title, длина 0 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-026 POST/PATCH /posts: title, длина 0 [PATCH]",
+          "status": "failed",
+          "failure": "AssertionError: expected 500 to be less than 300"
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-027",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-BND-027 POST/PATCH /posts: title, длина 1 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-027 POST/PATCH /posts: title, длина 1 [PATCH]",
+          "status": "failed",
+          "failure": "AssertionError: expected 500 to be less than 300"
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-028",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-BND-028 POST/PATCH /posts: title, длина 254 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-028 POST/PATCH /posts: title, длина 254 [PATCH]",
+          "status": "failed",
+          "failure": "AssertionError: expected 500 to be less than 300"
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-029",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-BND-029 POST/PATCH /posts: title, длина 255 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-029 POST/PATCH /posts: title, длина 255 [PATCH]",
+          "status": "failed",
+          "failure": "AssertionError: expected 500 to be less than 300"
+        }
+      ]
+    },
+    {
+      "id": "TC-BND-030",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-BND-030 POST/PATCH /posts: title, длина 256 [POST]",
+          "status": "passed",
+          "failure": ""
+        },
+        {
+          "name": "TC-BND-030 POST/PATCH /posts: title, длина 256 [PATCH]",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-001",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-001 GET /channels/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-002",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-002 PATCH /channels/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-003",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-003 DELETE /channels/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-004",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-004 POST /channels/:id/verify: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-005",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-005 GET /topics/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-006",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-006 PATCH /topics/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-007",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-007 DELETE /topics/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-008",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-008 GET /posts/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-009",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-009 PATCH /posts/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-010",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-010 DELETE /posts/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-011",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-011 GET /posts/:id/versions: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-012",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-012 POST /posts/:id/publications: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-013",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-013 GET /schedules/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-014",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-014 PATCH /schedules/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-015",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-015 DELETE /schedules/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-016",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-016 POST /schedules/:id/pause: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-017",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-017 POST /schedules/:id/resume: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-018",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-018 GET /publications/:id: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-019",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-019 POST /publications/:id/retry: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-020",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-020 POST /publications/:id/cancel: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-021",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-021 POST /moderation/:id/approve: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-022",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-022 POST /moderation/:id/revision: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-OWN-023",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-OWN-023 POST /moderation/:id/reject: чужой ресурс",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-SCH-017",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-SCH-017 FIRE_ONCE outside its grace period is skipped without paid work",
+          "status": "failed",
+          "failure": "AssertionError: expected 'PENDING' to be 'SKIPPED' // Object.is equality"
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-001",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-001 cancel из PENDING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-002",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-002 retry из PENDING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-003",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-003 generate из PENDING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-004",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-004 publish из PENDING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-005",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-005 cancel из GENERATING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-006",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-006 retry из GENERATING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-007",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-007 generate из GENERATING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-008",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-008 publish из GENERATING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-009",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-009 cancel из AWAITING_MODERATION",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-010",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-010 retry из AWAITING_MODERATION",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-011",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-011 generate из AWAITING_MODERATION",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-012",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-012 publish из AWAITING_MODERATION",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-013",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-013 cancel из READY",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-014",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-014 retry из READY",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-015",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-015 generate из READY",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-016",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-016 publish из READY",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-017",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-017 cancel из PUBLISHING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-018",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-018 retry из PUBLISHING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-019",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-019 generate из PUBLISHING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-020",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-020 publish из PUBLISHING",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-021",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-021 cancel из RETRY_WAIT",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-022",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-022 retry из RETRY_WAIT",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-023",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-023 generate из RETRY_WAIT",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-024",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-024 publish из RETRY_WAIT",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-025",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-025 cancel из PUBLISHED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-026",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-026 retry из PUBLISHED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-027",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-027 generate из PUBLISHED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-028",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-028 publish из PUBLISHED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-029",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-029 cancel из DELIVERY_UNKNOWN",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-030",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-030 retry из DELIVERY_UNKNOWN",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-031",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-031 generate из DELIVERY_UNKNOWN",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-032",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-032 publish из DELIVERY_UNKNOWN",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-033",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-033 cancel из FAILED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-034",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-034 retry из FAILED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-035",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-035 generate из FAILED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-036",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-036 publish из FAILED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-037",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-037 cancel из CANCELLED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-038",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-038 retry из CANCELLED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-039",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-039 generate из CANCELLED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-040",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-040 publish из CANCELLED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-041",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-041 cancel из SKIPPED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-042",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-042 retry из SKIPPED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-043",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-043 generate из SKIPPED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-STM-044",
+      "status": "PASS",
+      "variants": [
+        {
+          "name": "TC-STM-044 publish из SKIPPED",
+          "status": "passed",
+          "failure": ""
+        }
+      ]
+    },
+    {
+      "id": "TC-USG-014",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-USG-014 an image failure after earlier image commit does not attempt a second release",
+          "status": "failed",
+          "failure": "Error: promise rejected \"ApiHttpException: There is not enough res… { …(4) }\" instead of resolving"
+        }
+      ]
+    },
+    {
+      "id": "TC-USG-015",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-USG-015 manual retry after terminal release restores the image reservation",
+          "status": "failed",
+          "failure": "AssertionError: expected 'FAILED' to be 'PUBLISHED' // Object.is equality"
+        }
+      ]
+    },
+    {
+      "id": "TC-USG-016",
+      "status": "FAIL",
+      "variants": [
+        {
+          "name": "TC-USG-016 cancel RETRY_WAIT after image usage was committed does not release it twice",
+          "status": "failed",
+          "failure": "AssertionError: expected 409 to be less than 300"
+        }
+      ]
+    }
+  ]
+}

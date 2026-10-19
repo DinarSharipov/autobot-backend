@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'node:crypto';
 import { Prisma, PublicationStatus } from '../generated/prisma/client.js';
 
 import type { AppEnvironment } from '../config/environment.js';
@@ -38,7 +39,27 @@ const RETRYABLE_CODES = new Set([
   'AI_PROVIDER_HTTP_502',
   'AI_PROVIDER_HTTP_503',
   'AI_PROVIDER_HTTP_504',
+  'AI_PROVIDER_INVALID_RESPONSE',
 ]);
+
+type PublicationDefinition = {
+  prompt: string;
+  generateImage: boolean;
+  telegramChatId: string;
+};
+
+function definitionOf(value: unknown): PublicationDefinition | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.prompt !== 'string' ||
+    typeof data.generateImage !== 'boolean' ||
+    typeof data.telegramChatId !== 'string' ||
+    !/^-?\d+$/.test(data.telegramChatId)
+  )
+    return null;
+  return data as PublicationDefinition;
+}
 
 @Injectable()
 export class PublishingService {
@@ -111,12 +132,19 @@ export class PublishingService {
       include: { selectedVersion: true, post: { include: { channel: true } } },
     });
     if (!publication) return;
+    const definition = definitionOf(publication.definition);
+    const generateImage = definition?.generateImage ?? publication.post.generateImage;
+    const chatId = definition
+      ? BigInt(definition.telegramChatId)
+      : publication.post.channel.telegramChatId;
+    const prompt = definition?.prompt ?? publication.post.prompt;
+    const imageUsageKey = this.imageUsageKey(publication);
     if (!publication.selectedVersion?.text?.trim()) {
       await this.fail(
         publicationId,
         'PUBLICATION_TEXT_NOT_AVAILABLE',
         'Selected text is missing.',
-        Boolean(publication.post.generateImage),
+        generateImage,
       );
       return;
     }
@@ -124,9 +152,11 @@ export class PublishingService {
     let imagePath: string | undefined;
     let imageUsageCommitted = false;
     try {
-      const result = publication.post.generateImage
+      const result = generateImage
         ? await this.publishWithImage(
             publication,
+            { prompt, chatId },
+            imageUsageKey,
             (path) => {
               imagePath = path;
             },
@@ -134,17 +164,14 @@ export class PublishingService {
               imageUsageCommitted = true;
             },
           )
-        : await this.adapter.sendText(
-            publication.post.channel.telegramChatId,
-            publication.selectedVersion.text,
-          );
+        : await this.adapter.sendText(chatId, publication.selectedVersion.text);
       await this.prisma.publication.updateMany({
         where: { id: publicationId, status: PublicationStatus.PUBLISHING },
         data: {
           status: PublicationStatus.PUBLISHED,
           telegramChatId: result.chatId,
           telegramMessageId: result.messageId,
-          publishedWithImage: publication.post.generateImage,
+          publishedWithImage: generateImage,
           publishedAt: new Date(),
           nextAttemptAt: null,
           errorCode: null,
@@ -156,7 +183,7 @@ export class PublishingService {
         publicationId,
         publication.attemptCount,
         error,
-        publication.post.generateImage && !imageUsageCommitted,
+        generateImage && !imageUsageCommitted,
       );
     } finally {
       if (imagePath) await this.temporaryImages.remove(imagePath);
@@ -169,11 +196,13 @@ export class PublishingService {
       post: { prompt: string; userId: string; channel: { telegramChatId: bigint } };
       selectedVersion: { text: string | null } | null;
     },
+    definition: { prompt: string; chatId: bigint },
+    imageUsageKey: string,
     onPath: (path: string) => void,
     onUsageCommitted: () => void,
   ) {
     const image = await this.imageGeneration.generate({
-      prompt: publication.post.prompt,
+      prompt: definition.prompt,
       text: publication.selectedVersion!.text!,
       idempotencyKey: `publication:${publication.id}:image`,
     });
@@ -182,12 +211,12 @@ export class PublishingService {
       userId: publication.post.userId,
       metric: 'IMAGE_GENERATION',
       amount: 1,
-      operationKey: `publication:${publication.id}:image-generation:commit`,
+      operationKey: `${imageUsageKey}:commit`,
       metadata: { publicationId: publication.id },
     });
     onUsageCommitted();
     return this.adapter.sendPhoto(
-      publication.post.channel.telegramChatId,
+      definition.chatId,
       publication.selectedVersion!.text!,
       image.filePath,
     );
@@ -202,6 +231,7 @@ export class PublishingService {
       handler: async (transaction) => {
         const publication = await transaction.publication.findFirst({
           where: { id: publicationId, post: { userId } },
+          include: { post: true },
         });
         if (!publication) this.notFound();
         if (
@@ -214,6 +244,28 @@ export class PublishingService {
             'Only retryable failed publications can be retried.',
           );
         }
+        const imageUsageKey = this.imageUsageKey(publication);
+        const imageUsageCommitted = publication.post.generateImage
+          ? await transaction.usageLedgerEntry.findFirst({
+              where: {
+                operationKey: `${imageUsageKey}:commit`,
+                counter: { userId, metric: 'IMAGE_GENERATION' },
+              },
+            })
+          : null;
+        const retryImageUsageKey = imageUsageCommitted
+          ? publication.imageUsageKey
+          : `publication:${publication.id}:image-generation:retry:${randomUUID()}`;
+        if (publication.post.generateImage && !imageUsageCommitted) {
+          await this.usage.reserve({
+            userId,
+            metric: 'IMAGE_GENERATION',
+            amount: 1,
+            operationKey: `${retryImageUsageKey}:reserve`,
+            metadata: { publicationId: publication.id },
+            database: transaction,
+          });
+        }
         const updated = await transaction.publication.update({
           where: { id: publication.id },
           data: {
@@ -222,6 +274,9 @@ export class PublishingService {
             nextAttemptAt: null,
             errorCode: null,
             errorDetails: Prisma.JsonNull,
+            ...(publication.post.generateImage && !imageUsageCommitted
+              ? { imageUsageKey: retryImageUsageKey }
+              : {}),
           },
         });
         return toPublicationView(updated);
@@ -267,14 +322,22 @@ export class PublishingService {
           });
         }
         if (publication.post.generateImage) {
-          await this.usage.release({
-            userId: publication.post.userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `publication:${publication.id}:image-generation:release`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
+          const imageUsageCommitted = await transaction.usageLedgerEntry.findFirst({
+            where: {
+              operationKey: `${this.imageUsageKey(publication)}:commit`,
+              counter: { userId, metric: 'IMAGE_GENERATION' },
+            },
           });
+          if (!imageUsageCommitted) {
+            await this.usage.release({
+              userId: publication.post.userId,
+              metric: 'IMAGE_GENERATION',
+              amount: 1,
+              operationKey: `${this.imageUsageKey(publication)}:release`,
+              metadata: { publicationId: publication.id },
+              database: transaction,
+            });
+          }
         }
         return toPublicationView(
           await transaction.publication.update({
@@ -355,14 +418,22 @@ export class PublishingService {
           include: { post: true },
         });
         if (publication?.post.generateImage) {
-          await this.usage.release({
-            userId: publication.post.userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `publication:${publication.id}:image-generation:release`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
+          const imageUsageCommitted = await transaction.usageLedgerEntry.findFirst({
+            where: {
+              operationKey: `${this.imageUsageKey(publication)}:commit`,
+              counter: { userId: publication.post.userId, metric: 'IMAGE_GENERATION' },
+            },
           });
+          if (!imageUsageCommitted) {
+            await this.usage.release({
+              userId: publication.post.userId,
+              metric: 'IMAGE_GENERATION',
+              amount: 1,
+              operationKey: `${this.imageUsageKey(publication)}:release`,
+              metadata: { publicationId: publication.id },
+              database: transaction,
+            });
+          }
         }
       }
     });
@@ -375,5 +446,9 @@ export class PublishingService {
       'PUBLICATION_NOT_FOUND',
       'Publication not found.',
     );
+  }
+
+  private imageUsageKey(publication: { id: string; imageUsageKey: string | null }): string {
+    return publication.imageUsageKey ?? `publication:${publication.id}:image-generation`;
   }
 }

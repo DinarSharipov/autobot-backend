@@ -50,7 +50,7 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
       });
       const events = await this.prisma.outboxEvent.findMany({
         where: {
-          status: 'PENDING',
+          status: { in: ['PENDING', 'PUBLISHED'] },
           availableAt: { lte: new Date() },
           eventType: 'publication.generation.requested.v1',
         },
@@ -69,6 +69,12 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async dispatch(eventId: string): Promise<void> {
+    const current = await this.prisma.outboxEvent.findUnique({ where: { id: eventId } });
+    if (!current) return;
+    if (current.status === 'PUBLISHED') {
+      await this.reconcilePublished(current);
+      return;
+    }
     const claimed = await this.prisma.outboxEvent.updateMany({
       where: { id: eventId, status: 'PENDING', availableAt: { lte: new Date() } },
       data: { status: 'PROCESSING', lockedAt: new Date(), attempts: { increment: 1 } },
@@ -118,6 +124,30 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
         error: error instanceof Error ? error.name : 'UnknownError',
       });
     }
+  }
+
+  private async reconcilePublished(event: { id: string; payload: unknown }): Promise<void> {
+    const payload = event.payload as { schemaVersion?: unknown; publicationId?: unknown };
+    if (payload.schemaVersion !== 1 || typeof payload.publicationId !== 'string') return;
+    const publication = await this.prisma.publication.findUnique({
+      where: { id: payload.publicationId },
+      select: { status: true },
+    });
+    if (!publication || (publication.status !== 'PENDING' && publication.status !== 'GENERATING'))
+      return;
+    const jobId = `generation-${event.id}`;
+    if (await this.generationQueue.getJob(jobId)) return;
+    await this.generationQueue.add(
+      'generate-post',
+      { schemaVersion: 1, publicationId: payload.publicationId },
+      {
+        jobId,
+        attempts: this.config.get('PUBLICATION_MAX_ATTEMPTS', { infer: true }),
+        backoff: { type: 'gptunnel', delay: 1000 },
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      },
+    );
   }
 }
 

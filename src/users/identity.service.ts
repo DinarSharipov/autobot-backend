@@ -27,7 +27,7 @@ type TelegramProfileColumns = {
   profileUpdatedAt: Date;
 };
 
-const TRANSACTION_ATTEMPTS = 6;
+const TRANSACTION_ATTEMPTS = 8;
 
 @Injectable()
 export class IdentityService {
@@ -37,40 +37,83 @@ export class IdentityService {
     const telegramUserId = this.parseTelegramUserId(profile.telegramUserId);
 
     return this.withIdentityRetry<UserWithTelegram>(async () =>
-      this.prisma.$transaction(
-        async (transaction): Promise<UserWithTelegram> => {
-          const account = await transaction.telegramAccount.findUnique({
-            where: { telegramUserId },
-            include: { user: { include: { telegramAccount: true } } },
+      this.prisma.$transaction(async (transaction): Promise<UserWithTelegram> => {
+        // Concurrent bot deliveries for one Telegram account are common.
+        // Serialize them before the first read so all callers observe the
+        // canonical account instead of racing through nested creation.
+        await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`telegram:${telegramUserId}`}))`;
+        const account = await transaction.telegramAccount.findUnique({
+          where: { telegramUserId },
+          include: { user: { include: { telegramAccount: true } } },
+        });
+
+        if (account) {
+          if (account.user.status === 'DELETED') {
+            throw new ApiHttpException(
+              HttpStatus.UNAUTHORIZED,
+              'USER_INACTIVE',
+              'The user account is inactive.',
+            );
+          }
+          await transaction.telegramAccount.update({
+            where: { id: account.id },
+            data: this.profileUpdate(profile),
           });
 
-          if (account) {
-            await transaction.telegramAccount.update({
-              where: { id: account.id },
-              data: this.profileUpdate(profile),
-            });
-
-            return transaction.user.findUniqueOrThrow({
-              where: { id: account.userId },
-              include: { telegramAccount: true },
-            });
-          }
-
-          return transaction.user.create({
-            data: {
-              ...(profile.languageCode ? { locale: profile.languageCode } : {}),
-              telegramAccount: {
-                create: {
-                  telegramUserId,
-                  ...this.profileUpdate(profile),
-                },
-              },
-            },
+          const user = await transaction.user.findUniqueOrThrow({
+            where: { id: account.userId },
             include: { telegramAccount: true },
           });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      ),
+          await transaction.authIdentity.upsert({
+            where: {
+              provider_subject: {
+                provider: AuthProvider.TELEGRAM,
+                subject: telegramUserId.toString(),
+              },
+            },
+            create: {
+              provider: AuthProvider.TELEGRAM,
+              subject: telegramUserId.toString(),
+              userId: user.id,
+              telegramAccountId: account.id,
+              lastLoginAt: new Date(),
+            },
+            update: { telegramAccountId: account.id, lastLoginAt: new Date() },
+          });
+          return user;
+        }
+
+        const user = await transaction.user.create({
+          data: {
+            ...(profile.languageCode ? { locale: profile.languageCode } : {}),
+            telegramAccount: {
+              create: {
+                telegramUserId,
+                ...this.profileUpdate(profile),
+              },
+            },
+            authIdentities: {
+              create: {
+                provider: AuthProvider.TELEGRAM,
+                subject: telegramUserId.toString(),
+                lastLoginAt: new Date(),
+              },
+            },
+          },
+          include: { telegramAccount: true },
+        });
+        if (!user.telegramAccount) throw new Error('Telegram account creation failed');
+        await transaction.authIdentity.update({
+          where: {
+            provider_subject: {
+              provider: AuthProvider.TELEGRAM,
+              subject: telegramUserId.toString(),
+            },
+          },
+          data: { telegramAccountId: user.telegramAccount.id },
+        });
+        return user;
+      }),
     );
   }
 
@@ -243,7 +286,10 @@ export class IdentityService {
           throw error;
         }
 
-        await delay(attempt * 10);
+        // A small jitter keeps concurrent first-onboarding requests from
+        // repeatedly colliding on the same serializable transaction retry.
+        const backoff = Math.min(250, 10 * 2 ** (attempt - 1));
+        await delay(backoff + Math.floor(Math.random() * 10));
       }
     }
 

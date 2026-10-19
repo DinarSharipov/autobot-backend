@@ -2,6 +2,13 @@
 
 ## Current status
 
+### Приёмка 18–19 октября 2026
+
+Исходный расширенный прогон [RUN-20261018-002](test-runs/RUN-20261018-002.md) выявил 27
+дефектов среди 430 проверенных кейсов. Все воспроизведённые дефекты исправлены; повторный
+изолированный acceptance-прогон на PostgreSQL 17 и Redis завершён с результатом **891/891 PASS**.
+Платные генерации и отправки в Telegram по-прежнему не выполнялись.
+
 Stages 1–4 are complete: contracts, backend foundation, bot service access, and core
 domain/entitlements are runtime-verified.
 Stage 5 is in progress: post definitions and immediate publication occurrences use an atomic

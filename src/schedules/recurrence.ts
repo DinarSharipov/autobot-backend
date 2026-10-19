@@ -100,9 +100,15 @@ export function nextOccurrence(input: {
   const anchorLocal = zonedParts(input.anchor, input.timezone);
   const afterLocal = zonedParts(input.after, input.timezone);
   const anchorDate = dateOnly(anchorLocal);
+  const untilLocalDate = input.rule.until
+    ? dateOnly(zonedParts(input.rule.until, input.timezone))
+    : null;
   let candidateDate = dateOnly(afterLocal);
 
   for (let index = 0; index < MAX_SCAN_DAYS; index += 1) {
+    // No later local date can satisfy an UNTIL bound. This avoids scanning
+    // twenty years while the schedule materialization transaction is open.
+    if (untilLocalDate && compareDate(candidateDate, untilLocalDate) > 0) return null;
     if (index > 0 || compareDate(candidateDate, dateOnly(afterLocal)) !== 0) {
       const candidateLocal = { ...anchorLocal, ...dateParts(candidateDate) };
       if (matchesDate(candidateDate, anchorDate, input.rule)) {
@@ -152,10 +158,24 @@ export function zonedToUtc(local: LocalDateTime, timezone: string): Date {
     if (sameLocal(zonedParts(candidate, timezone), local)) matches.push(candidate);
   }
   if (matches.length > 0) return new Date(Math.min(...matches.map((value) => value.getTime())));
-  for (let offset = 0; offset <= 360; offset += 1) {
-    const candidate = new Date(initial.getTime() + offset * 60_000);
-    if (compareLocal(zonedParts(candidate, timezone), local) >= 0) return candidate;
+  // For a DST gap choose the first valid wall-clock instant after the gap,
+  // not the same minute after the transition (02:30 -> 03:00, not 03:30).
+  // Search a broad UTC window because the initial offset estimate may be on
+  // either side of the transition.
+  let firstAfterGap: Date | null = null;
+  for (let offset = -1_080; offset <= 1_080; offset += 1) {
+    const candidate = new Date(localAsUtc + offset * 60_000);
+    const parts = zonedParts(candidate, timezone);
+    if (
+      parts.year === local.year &&
+      parts.month === local.month &&
+      parts.day === local.day &&
+      compareLocal(parts, local) >= 0 &&
+      (!firstAfterGap || candidate < firstAfterGap)
+    )
+      firstAfterGap = candidate;
   }
+  if (firstAfterGap) return firstAfterGap;
   return initial;
 }
 
@@ -192,6 +212,20 @@ function parsePositiveInteger(value: string, field: string): number {
 }
 
 function parseUntil(value: string): Date {
+  if (/^\d{8}$/.test(value)) {
+    const year = Number(value.slice(0, 4));
+    const month = Number(value.slice(4, 6));
+    const day = Number(value.slice(6, 8));
+    const calendar = new Date(Date.UTC(year, month - 1, day));
+    if (
+      month < 1 ||
+      month > 12 ||
+      calendar.getUTCFullYear() !== year ||
+      calendar.getUTCMonth() !== month - 1 ||
+      calendar.getUTCDate() !== day
+    )
+      invalid('UNTIL must contain a real calendar date.');
+  }
   const normalized = /^\d{8}$/.test(value)
     ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T23:59:59Z`
     : value;

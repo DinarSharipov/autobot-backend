@@ -19,3 +19,11 @@ process.env.BOT_SERVICE_ACTIVE_SECRET = 'test-secret-32-bytes-long-1234567890';
 process.env.BOT_SERVICE_PREVIOUS_KEY_ID = 'previous-key';
 process.env.BOT_SERVICE_PREVIOUS_SECRET = 'previous-secret-32-bytes-long-123456';
 process.env.AUTH_RATE_LIMIT_MAX = '1000';
+
+// Keep provider fixtures deterministic and never inherit a real key/model from local .env.
+process.env.GPTUNNEL_API_KEY = 'test-gptunnel-secret';
+process.env.GPTUNNEL_USE_WALLET_BALANCE = 'false';
+process.env.GPTUNNEL_IMAGE_PARAMS = '{}';
+process.env.AI_TEXT_MODEL = 'gpt-4o-mini';
+process.env.AI_IMAGE_MODEL = 'gpt-image';
+process.env.TELEGRAM_BOT_TOKEN = 'test-telegram-token';

@@ -90,7 +90,8 @@ export class EntitlementService {
       IMAGE_GENERATION: entitlements.imageGenerationMonthly,
       MODERATION_REVISION: entitlements.moderationRevisionMonthly,
     };
-    return limits[metric] ?? 0;
+    // `null` is an intentional unlimited quota, not a missing value.
+    return Object.prototype.hasOwnProperty.call(limits, metric) ? limits[metric]! : 0;
   }
 
   assertMetricEnabled(entitlements: Entitlements, metric: string): void {

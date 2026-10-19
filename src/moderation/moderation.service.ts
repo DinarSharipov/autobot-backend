@@ -148,6 +148,13 @@ export class ModerationService {
     key: string,
   ): Promise<PublicationView> {
     const normalizedFeedback = feedback.trim();
+    if (!normalizedFeedback) {
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'INVALID_REVISION_FEEDBACK',
+        'Revision feedback must not be empty.',
+      );
+    }
     return this.idempotency.execute({
       userId,
       operation: `moderation.revision:${requestId}`,
@@ -157,12 +164,16 @@ export class ModerationService {
         const request = await this.pendingRequest(transaction, userId, requestId, version);
         const now = new Date();
         const nextModerationVersion = request.version + 1;
-        const textReserveKey = `publication:${request.publicationId}:revision:${nextModerationVersion}:text-generation:reserve`;
+        // A request's optimistic-lock version is reset for each generated
+        // version. Use the source PostVersion sequence so ledger keys stay
+        // unique across a chain of revisions.
+        const revisionKey = `revision:${request.versionId}`;
+        const textReserveKey = `publication:${request.publicationId}:${revisionKey}:text-generation:reserve`;
         await this.usage.reserve({
           userId,
           metric: 'MODERATION_REVISION',
           amount: 1,
-          operationKey: `moderation:${request.id}:revision:${nextModerationVersion}:reserve`,
+          operationKey: `moderation:${request.id}:${revisionKey}:reserve`,
           metadata: { publicationId: request.publicationId },
           database: transaction,
         });
@@ -170,7 +181,7 @@ export class ModerationService {
           userId,
           metric: 'MODERATION_REVISION',
           amount: 1,
-          operationKey: `moderation:${request.id}:revision:${nextModerationVersion}:commit`,
+          operationKey: `moderation:${request.id}:${revisionKey}:commit`,
           metadata: { publicationId: request.publicationId },
           database: transaction,
         });

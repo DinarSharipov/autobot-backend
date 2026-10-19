@@ -8,6 +8,28 @@ import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
 import { TextGenerationAdapter, TextGenerationProviderError } from './text-generation.adapter.js';
 
+type PublicationDefinition = {
+  prompt: string;
+  generateImage: boolean;
+  publicationMode: PublicationMode;
+  topicPromptTemplate: string | null;
+  telegramChatId: string;
+};
+
+function definitionOf(value: unknown): PublicationDefinition | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.prompt !== 'string' ||
+    typeof data.generateImage !== 'boolean' ||
+    (data.publicationMode !== 'AUTO' && data.publicationMode !== 'MODERATION') ||
+    (data.topicPromptTemplate !== null && typeof data.topicPromptTemplate !== 'string') ||
+    typeof data.telegramChatId !== 'string'
+  )
+    return null;
+  return data as PublicationDefinition;
+}
+
 type Claim = {
   publicationId: string;
   aiRequestId: string;
@@ -68,7 +90,7 @@ export class GenerationService {
       where: { publicationId, status: 'REVISION_REQUESTED' },
       orderBy: { createdAt: 'desc' },
     });
-    const revisionUsageSuffix = revision ? `:revision:${revision.version}` : '';
+    const revisionUsageSuffix = revision ? `:revision:${revision.versionId}` : '';
     await this.fail(
       {
         publicationId,
@@ -136,7 +158,7 @@ export class GenerationService {
       });
       const generationSequence =
         existing?.generatedVersion?.sequence ?? (last._max.sequence ?? 0) + 1;
-      const revisionUsageSuffix = revision ? `:revision:${revision.version}` : '';
+      const revisionUsageSuffix = revision ? `:revision:${revision.versionId}` : '';
       const version =
         existing?.generatedVersion ??
         (await transaction.postVersion.create({
@@ -148,16 +170,18 @@ export class GenerationService {
             status: 'GENERATING',
           },
         }));
+      const definition = definitionOf(publication.definition);
       return {
         publicationId,
         aiRequestId: aiRequest.id,
         versionId: version.id,
-        prompt: publication.post.prompt,
-        topicPromptTemplate: publication.post.topic?.promptTemplate ?? null,
+        prompt: definition?.prompt ?? publication.post.prompt,
+        topicPromptTemplate:
+          definition?.topicPromptTemplate ?? publication.post.topic?.promptTemplate ?? null,
         revisionFeedback: revision?.feedback ?? null,
         previousText: revision?.postVersion.text ?? null,
-        maxCharacters: publication.post.generateImage ? 1024 : 4096,
-        publicationMode: publication.post.publicationMode,
+        maxCharacters: (definition?.generateImage ?? publication.post.generateImage) ? 1024 : 4096,
+        publicationMode: definition?.publicationMode ?? publication.post.publicationMode,
         generationSequence,
         usageCommitKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:commit`,
         usageReleaseKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:release`,

@@ -79,7 +79,7 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
     }
 
     const response = await this.request('sendMessage', { chat_id: chatId.toString(), text });
-    return this.result(response);
+    return this.result(response, chatId);
   }
 
   async sendPhoto(
@@ -158,7 +158,7 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
         error instanceof Error ? error.message : 'Telegram response was not received.',
       );
     }
-    return this.result(response);
+    return this.result(response, chatId);
   }
 
   private async request(method: 'sendMessage', body: Record<string, string>): Promise<Response> {
@@ -193,7 +193,10 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
     }
   }
 
-  private async result(response: Response): Promise<TelegramPublicationResult> {
+  private async result(
+    response: Response,
+    expectedChatId: bigint,
+  ): Promise<TelegramPublicationResult> {
     let payload: TelegramPayload;
     try {
       payload = (await response.json()) as TelegramPayload;
@@ -245,6 +248,15 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
         true,
         undefined,
         'Telegram returned no message identifier.',
+      );
+    }
+    if (returnedChatId !== expectedChatId) {
+      throw new TelegramPublicationError(
+        'TELEGRAM_INVALID_RESPONSE',
+        false,
+        true,
+        undefined,
+        'Telegram returned a message for a different chat.',
       );
     }
     return { chatId: returnedChatId, messageId };

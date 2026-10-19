@@ -332,6 +332,8 @@ model Publication {
   selectedVersionId  String?             @unique @db.Uuid
   idempotencyKey     String?             @unique
   scheduledFor       DateTime
+  definition         Json?
+  imageUsageKey      String?
   status             PublicationStatus   @default(PENDING)
   attemptCount       Int                 @default(0)
   nextAttemptAt      DateTime?

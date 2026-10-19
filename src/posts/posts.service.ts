@@ -91,7 +91,14 @@ export class PostsService {
     if (Object.values(dto).every((value) => value === undefined)) this.emptyUpdate();
     const current = await this.ownedPost(userId, postId);
     if (current.status !== PostStatus.ACTIVE) this.notEditable();
-    const data = this.normalized({ ...current, ...dto });
+    const data = this.normalized({
+      channelId: dto.channelId ?? current.channelId,
+      topicId: dto.topicId === undefined ? current.topicId : (dto.topicId ?? null),
+      title: dto.title === undefined ? current.title : dto.title,
+      prompt: dto.prompt ?? current.prompt,
+      generateImage: dto.generateImage ?? current.generateImage,
+      publicationMode: dto.publicationMode ?? current.publicationMode,
+    });
     await this.assertDependencies(userId, data, this.prisma);
     const result = await this.prisma.post.updateMany({
       where: { id: postId, userId, version, status: PostStatus.ACTIVE },
@@ -153,13 +160,21 @@ export class PostsService {
       key,
       requestHash: this.idempotency.digest({ postId, version }),
       handler: async (transaction) => {
-        const post = await transaction.post.findFirst({ where: { id: postId, userId } });
+        const post = await transaction.post.findFirst({
+          where: { id: postId, userId },
+          include: { channel: true, topic: true },
+        });
         if (!post) this.notFound();
         if (post.version !== version) this.stale(post.version);
         if (post.status !== PostStatus.ACTIVE) this.notPublishable();
         await this.assertDependencies(userId, post, transaction);
         const publication = await transaction.publication.create({
-          data: { postId, idempotencyKey: `${userId}:${key}`, scheduledFor: new Date() },
+          data: {
+            postId,
+            idempotencyKey: `${userId}:${key}`,
+            scheduledFor: new Date(),
+            definition: this.publicationDefinition(post),
+          },
         });
         await this.usage.reserve({
           userId,
@@ -208,6 +223,22 @@ export class PostsService {
       prompt: input.prompt.trim(),
       generateImage: input.generateImage,
       publicationMode: input.publicationMode,
+    };
+  }
+
+  private publicationDefinition(post: {
+    prompt: string;
+    generateImage: boolean;
+    publicationMode: PublicationMode;
+    channel: { telegramChatId: bigint };
+    topic: { promptTemplate: string } | null;
+  }): Prisma.InputJsonValue {
+    return {
+      prompt: post.prompt,
+      generateImage: post.generateImage,
+      publicationMode: post.publicationMode,
+      telegramChatId: post.channel.telegramChatId.toString(),
+      topicPromptTemplate: post.topic?.promptTemplate ?? null,
     };
   }
 
