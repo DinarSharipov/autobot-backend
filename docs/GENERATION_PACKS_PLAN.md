@@ -33,24 +33,16 @@ Web Admin implementation, deployment, and activation remain postponed.
   requiring confirmation. Backend concurrency checks are authoritative.
 - Channel/topic limits are global operational policy, not paid tiers. Initial proposed defaults:
   3 active channels and 10 active topics per account; expose limits through the API.
-- Proposed one-time onboarding gift: 5 TEXT and 1 IMAGE credit. Provision idempotently per user;
+- One-time onboarding gift: 3 TEXT and 1 IMAGE credit, as recorded in [PRICING.md](PRICING.md). Provision idempotently per user;
   do not reset it monthly or on re-login. Keep gifts separate from purchased grants in the ledger.
 
-## Draft catalogue — not a live checkout configuration
+## Pricing source of truth
 
-| Credit type | Quantity | RUB price |
-| --- | ---: | ---: |
-| TEXT | 20 | 99 |
-| TEXT | 50 | 219 |
-| TEXT | 100 | 399 |
-| IMAGE | 10 | 79 |
-| IMAGE | 30 | 219 |
-| IMAGE | 100 | 649 |
-
-Prices are provisional until payment fees/taxes and unit economics are reviewed. Catalogue,
-global resource caps and gift amounts are server-controlled configuration, not client constants.
-An order snapshots pack quantity, credit type, currency, price and catalogue version.
-Existing balances must not be repriced or erased by later catalogue changes.
+The agreed starting pack prices, unit prices, one-time trial (3 TEXT + 1 IMAGE),
+cost assumptions and review conditions are in [PRICING.md](PRICING.md).
+Do not maintain a duplicate price table here or hardcode prices in clients.
+Catalogue values are server-controlled; each order snapshots quantity, type, currency,
+price and catalogue version. Documentation does not enable live checkout.
 
 ## Backend accounting and payments
 
