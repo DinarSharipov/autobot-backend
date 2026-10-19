@@ -11,7 +11,13 @@ if [[ ! -s "$current_environment" || ! -s "$incoming_environment" ]]; then
   exit 1
 fi
 
-awk -F= '$1 != "YOOKASSA_SHOP_ID" && $1 != "YOOKASSA_SECRET_KEY" { print }' \
+awk -F= '
+  $1 != "AUTOBOT_API_IMAGE" &&
+  $1 != "AUTOBOT_MIGRATION_IMAGE" &&
+  $1 != "BUILD_SHA" &&
+  $1 != "YOOKASSA_SHOP_ID" &&
+  $1 != "YOOKASSA_SECRET_KEY" { print }
+' \
   "$current_environment" > "$next_environment"
 cat "$incoming_environment" >> "$next_environment"
 chmod 600 "$next_environment"

@@ -7,7 +7,13 @@ if (!outputPath) {
   throw new Error('Usage: node scripts/ci/render-yookassa-env.mjs <output-path>');
 }
 
-const required = ['YOOKASSA_SHOP_ID', 'YOOKASSA_SECRET_KEY'];
+const required = [
+  'AUTOBOT_API_IMAGE',
+  'AUTOBOT_MIGRATION_IMAGE',
+  'BUILD_SHA',
+  'YOOKASSA_SHOP_ID',
+  'YOOKASSA_SECRET_KEY',
+];
 const missing = required.filter((name) => !process.env[name]?.trim());
 
 if (missing.length > 0) {
