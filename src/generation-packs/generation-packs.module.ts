@@ -6,11 +6,12 @@ import { GenerationPacksController } from './generation-packs.controller.js';
 import { PurchaseService } from './purchase.service.js';
 import { WalletService } from './wallet.service.js';
 import { GenerationFundingService } from './generation-funding.service.js';
+import { RevisionAllowanceService } from './revision-allowance.service.js';
 
 @Module({
   imports: [AuthModule, IdempotencyModule],
   controllers: [GenerationPacksController],
-  providers: [PurchaseService, WalletService, GenerationFundingService],
-  exports: [PurchaseService, WalletService, GenerationFundingService],
+  providers: [PurchaseService, WalletService, RevisionAllowanceService, GenerationFundingService],
+  exports: [PurchaseService, WalletService, RevisionAllowanceService, GenerationFundingService],
 })
 export class GenerationPacksModule {}

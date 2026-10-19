@@ -5,6 +5,7 @@ import { CreditType, type Prisma } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { UsageService } from '../subscriptions/usage.service.js';
 import { WalletService } from './wallet.service.js';
+import { RevisionAllowanceService } from './revision-allowance.service.js';
 
 @Injectable()
 export class GenerationFundingService {
@@ -12,9 +13,10 @@ export class GenerationFundingService {
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly usage: UsageService,
     private readonly wallet: WalletService,
+    private readonly allowance: RevisionAllowanceService,
   ) {}
 
-  private get prepaid(): boolean {
+  get isPrepaid(): boolean {
     return this.config.get('PREPAID_GENERATION_ENABLED', { infer: true });
   }
 
@@ -72,6 +74,54 @@ export class GenerationFundingService {
     return this.mutate('release', userId, CreditType.IMAGE, publicationId, database, operationBase);
   }
 
+  ensureRevisionAllowance(
+    userId: string,
+    publicationId: string,
+    database: Prisma.TransactionClient,
+  ) {
+    return this.allowance.ensure(userId, publicationId, database);
+  }
+
+  reserveRevision(
+    userId: string,
+    publicationId: string,
+    operationKey: string,
+    database?: Prisma.TransactionClient,
+  ) {
+    if (this.isPrepaid)
+      return this.allowance.reserve(userId, publicationId, operationKey, database);
+    return this.usage.reserve({
+      userId,
+      metric: 'MODERATION_REVISION',
+      amount: 1,
+      operationKey,
+      metadata: { publicationId },
+      ...(database ? { database } : {}),
+    });
+  }
+
+  commitRevisionText(
+    userId: string,
+    publicationId: string,
+    database: Prisma.TransactionClient,
+    textOperationBase: string,
+    revisionAllowanceKey: string,
+  ) {
+    if (this.isPrepaid) return this.allowance.commit(revisionAllowanceKey, database);
+    return this.commitText(userId, publicationId, database, textOperationBase);
+  }
+
+  releaseRevisionText(
+    userId: string,
+    publicationId: string,
+    database: Prisma.TransactionClient,
+    textOperationBase: string,
+    revisionAllowanceKey: string,
+  ) {
+    if (this.isPrepaid) return this.allowance.release(revisionAllowanceKey, database);
+    return this.releaseText(userId, publicationId, database, textOperationBase);
+  }
+
   private mutate(
     action: 'reserve' | 'commit' | 'release',
     userId: string,
@@ -81,7 +131,7 @@ export class GenerationFundingService {
     operationBase?: string,
   ) {
     const operationKey = `${operationBase ?? `publication:${publicationId}:${creditType.toLowerCase()}-generation`}:${action}`;
-    if (this.prepaid) {
+    if (this.isPrepaid) {
       return this.wallet[action](
         {
           userId,

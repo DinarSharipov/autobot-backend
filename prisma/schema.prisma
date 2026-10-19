@@ -135,6 +135,12 @@ enum ReservationStatus {
   RELEASED
 }
 
+enum RevisionAllowanceOperationStatus {
+  RESERVED
+  COMMITTED
+  RELEASED
+}
+
 enum PurchaseOrderStatus {
   PENDING
   AWAITING_PAYMENT
@@ -495,8 +501,21 @@ model TextRevisionAllowance {
   updatedAt         DateTime    @updatedAt
   user              User        @relation(fields: [userId], references: [id], onDelete: Restrict)
   publication       Publication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  operations        TextRevisionAllowanceOperation[]
 
   @@index([userId, createdAt])
+}
+
+model TextRevisionAllowanceOperation {
+  id           String                           @id @default(uuid()) @db.Uuid
+  allowanceId  String                           @db.Uuid
+  operationKey String                           @unique
+  status       RevisionAllowanceOperationStatus @default(RESERVED)
+  createdAt    DateTime                         @default(now())
+  settledAt    DateTime?
+  allowance    TextRevisionAllowance            @relation(fields: [allowanceId], references: [id], onDelete: Restrict)
+
+  @@index([allowanceId, status])
 }
 
 model GenerationPack {

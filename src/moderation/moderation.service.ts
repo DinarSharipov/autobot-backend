@@ -6,6 +6,7 @@ import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import type { ModerationListQuery } from './moderation.dto.js';
 import { toModerationRequestView } from './moderation.types.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
@@ -18,6 +19,7 @@ export class ModerationService {
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
     private readonly usage: UsageService,
+    private readonly funding: GenerationFundingService,
   ) {}
 
   async list(userId: string, query: ModerationListQuery) {
@@ -122,14 +124,7 @@ export class ModerationService {
           data: { status: 'CANCELLED' },
         });
         if (request.publication.post.generateImage) {
-          await this.usage.release({
-            userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `publication:${request.publicationId}:image-generation:release`,
-            metadata: { publicationId: request.publicationId },
-            database: transaction,
-          });
+          await this.funding.releaseImage(userId, request.publicationId, transaction);
         }
         await this.audit(transaction, userId, request.id, 'moderation.rejected', {
           publicationId: request.publicationId,
@@ -169,30 +164,31 @@ export class ModerationService {
         // unique across a chain of revisions.
         const revisionKey = `revision:${request.versionId}`;
         const textReserveKey = `publication:${request.publicationId}:${revisionKey}:text-generation:reserve`;
-        await this.usage.reserve({
+        const allowanceKey = `publication:${request.publicationId}:${revisionKey}:included-revision`;
+        await this.funding.reserveRevision(
           userId,
-          metric: 'MODERATION_REVISION',
-          amount: 1,
-          operationKey: `moderation:${request.id}:${revisionKey}:reserve`,
-          metadata: { publicationId: request.publicationId },
-          database: transaction,
-        });
-        await this.usage.commit({
-          userId,
-          metric: 'MODERATION_REVISION',
-          amount: 1,
-          operationKey: `moderation:${request.id}:${revisionKey}:commit`,
-          metadata: { publicationId: request.publicationId },
-          database: transaction,
-        });
-        await this.usage.reserve({
-          userId,
-          metric: 'TEXT_GENERATION',
-          amount: 1,
-          operationKey: textReserveKey,
-          metadata: { publicationId: request.publicationId },
-          database: transaction,
-        });
+          request.publicationId,
+          allowanceKey,
+          transaction,
+        );
+        if (!this.funding.isPrepaid) {
+          await this.usage.commit({
+            userId,
+            metric: 'MODERATION_REVISION',
+            amount: 1,
+            operationKey: `moderation:${request.id}:${revisionKey}:commit`,
+            metadata: { publicationId: request.publicationId },
+            database: transaction,
+          });
+          await this.usage.reserve({
+            userId,
+            metric: 'TEXT_GENERATION',
+            amount: 1,
+            operationKey: textReserveKey,
+            metadata: { publicationId: request.publicationId },
+            database: transaction,
+          });
+        }
         await transaction.moderationRequest.update({
           where: { id: request.id },
           data: {

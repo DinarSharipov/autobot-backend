@@ -43,6 +43,7 @@ type Claim = {
   generationSequence: number;
   usageCommitKey: string;
   usageReleaseKey: string;
+  revisionAllowanceKey: string | null;
 };
 
 @Injectable()
@@ -105,6 +106,9 @@ export class GenerationService {
         generationSequence: version.sequence,
         usageCommitKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:commit`,
         usageReleaseKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:release`,
+        revisionAllowanceKey: revision
+          ? `publication:${publicationId}:revision:${revision.versionId}:included-revision`
+          : null,
       },
       code,
     );
@@ -185,6 +189,9 @@ export class GenerationService {
         generationSequence,
         usageCommitKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:commit`,
         usageReleaseKey: `publication:${publicationId}${revisionUsageSuffix}:text-generation:release`,
+        revisionAllowanceKey: revision
+          ? `publication:${publicationId}:revision:${revision.versionId}:included-revision`
+          : null,
       };
     });
   }
@@ -247,12 +254,27 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      await this.funding.commitText(
-        publication.post.userId,
-        claim.publicationId,
-        transaction,
-        claim.usageCommitKey.slice(0, -':commit'.length),
-      );
+      if (claim.revisionAllowanceKey) {
+        await this.funding.commitRevisionText(
+          publication.post.userId,
+          claim.publicationId,
+          transaction,
+          claim.usageCommitKey.slice(0, -':commit'.length),
+          claim.revisionAllowanceKey,
+        );
+      } else {
+        await this.funding.commitText(
+          publication.post.userId,
+          claim.publicationId,
+          transaction,
+          claim.usageCommitKey.slice(0, -':commit'.length),
+        );
+        await this.funding.ensureRevisionAllowance(
+          publication.post.userId,
+          claim.publicationId,
+          transaction,
+        );
+      }
     });
   }
 
@@ -275,12 +297,22 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      await this.funding.releaseText(
-        publication.post.userId,
-        claim.publicationId,
-        transaction,
-        claim.usageReleaseKey.slice(0, -':release'.length),
-      );
+      if (claim.revisionAllowanceKey) {
+        await this.funding.releaseRevisionText(
+          publication.post.userId,
+          claim.publicationId,
+          transaction,
+          claim.usageReleaseKey.slice(0, -':release'.length),
+          claim.revisionAllowanceKey,
+        );
+      } else {
+        await this.funding.releaseText(
+          publication.post.userId,
+          claim.publicationId,
+          transaction,
+          claim.usageReleaseKey.slice(0, -':release'.length),
+        );
+      }
       if (publication.post.generateImage) {
         await this.funding.releaseImage(publication.post.userId, claim.publicationId, transaction);
       }

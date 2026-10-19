@@ -6,11 +6,18 @@ import { GenerationFundingService } from './generation-funding.service.js';
 function service(enabled: boolean) {
   const usage = { reserve: vi.fn(), commit: vi.fn(), release: vi.fn() };
   const wallet = { reserve: vi.fn(), commit: vi.fn(), release: vi.fn() };
+  const allowance = { reserve: vi.fn(), commit: vi.fn(), release: vi.fn(), ensure: vi.fn() };
   const config = { get: vi.fn().mockReturnValue(enabled) };
   return {
-    funding: new GenerationFundingService(config as never, usage as never, wallet as never),
+    funding: new GenerationFundingService(
+      config as never,
+      usage as never,
+      wallet as never,
+      allowance as never,
+    ),
     usage,
     wallet,
+    allowance,
   };
 }
 
@@ -39,5 +46,19 @@ describe('GenerationFundingService', () => {
       expect.objectContaining({ metric: 'IMAGE_GENERATION', amount: 1 }),
     );
     expect(wallet.commit).not.toHaveBeenCalled();
+  });
+
+  it('routes included revisions to the occurrence allowance in prepaid mode', async () => {
+    const { funding, usage, wallet, allowance } = service(true);
+    await funding.reserveRevision('user-1', 'publication-1', 'revision-operation');
+
+    expect(allowance.reserve).toHaveBeenCalledWith(
+      'user-1',
+      'publication-1',
+      'revision-operation',
+      undefined,
+    );
+    expect(usage.reserve).not.toHaveBeenCalled();
+    expect(wallet.reserve).not.toHaveBeenCalled();
   });
 });
