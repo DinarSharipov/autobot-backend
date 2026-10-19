@@ -1,5 +1,7 @@
 # AGENTS.md
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 ## Project
 
 Autobot is a Telegram-first service for creating, scheduling, moderating, and publishing AI-generated posts to Telegram channels.
@@ -28,7 +30,7 @@ Related repositories:
 
 ## Architectural role
 
-This repository is the business core of Autobot. It owns domain state, validation, authentication, subscription rules, AI orchestration, scheduling, queues, and Telegram publication.
+This repository is the business core of Autobot. It owns domain state, validation, authentication, prepaid billing rules, AI orchestration, scheduling, queues, and Telegram publication.
 
 The NestJS API is the central application boundary and MUST NOT depend on grammY or React UI code.
 
@@ -128,7 +130,7 @@ Backend modules should include:
 - generation
 - publishing
 - scheduling
-- subscriptions
+- billing, wallets, packs and payments (legacy subscriptions require migration)
 - usage/limits
 - AI integrations
 - Telegram publishing integration
@@ -146,14 +148,10 @@ Publishing modes:
 - AUTO: generated content proceeds to publication automatically
 - MODERATION: generated content waits for user review; revisions may be requested before approval
 
-Subscription/entitlement rules must be centralized, for example through `EntitlementService` and `UsageService`.
-
-At minimum subscription policy controls:
-
-- number of channels
-- number of topics
-- moderation/revision usage
-- image generation availability/usage
+Billing/credit and global resource-limit policies must be centralized in backend services.
+The authoritative target rules and pending migration are in [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md).
+No paid tiers or monthly quota resets in the target model. Include three successful text revisions
+per initial paid post occurrence; charge every new or replacement image separately.
 
 ## Data retention
 
@@ -163,9 +161,9 @@ At minimum subscription policy controls:
 - Do not persist GPT/provider conversation messages, assembled system prompts, raw provider responses, or hidden reasoning.
 - Do not store generated image bytes, base64, URLs, or filesystem paths in PostgreSQL.
 - Do not introduce S3, MinIO, or another durable image/object store in MVP.
-- Generate an optional image only after text is ready/approved and immediately before Telegram publication.
+- Generate optional images after text is ready; MODERATION must preview and approve the selected image before publication. AUTO remains unattended.
 - Image files may exist only in a restricted temporary local directory and must be deleted after upload, terminal failure/cancellation, or TTL expiry.
-- Image preview/moderation before publication is out of scope for MVP.
+- Image preview/regeneration before publication is required by the new pack model; implement selected-image reuse per GENERATION_PACKS_PLAN.md.
 
 ## Scheduling and queues
 
@@ -177,7 +175,7 @@ Use Redis + BullMQ for:
 - retries
 - other background work
 
-Image generation is executed inside the publication job immediately before Telegram upload so image content is not passed durably between jobs.
+Separate image generation/preview from final delivery as planned in GENERATION_PACKS_PLAN.md. Reuse the selected Telegram media reference rather than generating another image at delivery.
 
 Do not implement durable scheduling with in-memory timers.
 
@@ -204,8 +202,14 @@ Likely entities:
 - PostSchedule
 - Publication
 - ModerationRequest
-- Subscription
-- SubscriptionPlan
+- GenerationWallet
+- CreditLedgerEntry
+- GenerationReservation
+- TextRevisionAllowance
+- GenerationPack
+- PurchaseOrder
+- PaymentEvent
+- Legacy Subscription/SubscriptionPlan (migration only)
 - Usage
 - AIRequest
 - Session

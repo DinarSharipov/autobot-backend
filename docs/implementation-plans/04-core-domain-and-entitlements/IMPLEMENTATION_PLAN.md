@@ -1,3 +1,44 @@
+# Stage 4: Core domain and prepaid billing
+
+## Status
+
+Legacy channel/topic/subscription foundation was completed on 2026-10-08.
+The prepaid transition approved on 2026-10-19 is PENDING and reopens billing deliverables.
+[Generation packs plan](../../GENERATION_PACKS_PLAN.md) is authoritative.
+
+## Target scope
+
+Preserve ownership-safe channel/topic management, Telegram validation and centralized policy services.
+Replace monthly free/pro entitlements with independent prepaid TEXT/IMAGE wallets, pack purchases,
+global channel/topic caps and occurrence-scoped included text revisions.
+
+## Backend delivery plan
+
+- [ ] Finalize billing, allowance and selected-image OpenAPI/domain contracts before client implementation.
+- [ ] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
+- [ ] Replace subscription-gated policies and monthly quotas with prepaid credits and global resource caps.
+- [ ] Implement one initial TEXT debit plus three included revisions and paid revisions thereafter.
+- [ ] Make recurring occurrence, failure, cancellation, retry and insufficient-funds accounting atomic.
+- [ ] Implement purchase catalogue, YooKassa checkout, payment reconciliation and compensating refund ledger.
+- [ ] Add selected-image preview/regeneration/approval/reuse and update media ADR/retention contracts.
+- [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
+- [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
+- [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
+  build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+- [ ] Deploy only after compatible client contracts and migration verification are complete.
+
+
+## Exit criteria
+
+All pending acceptance criteria in GENERATION_PACKS_PLAN.md pass, both client contracts are compatible,
+migration preserves history/in-flight work, and runtime status explicitly identifies the active billing mode.
+No existing legacy PASS result is proof that prepaid billing works.
+
+## Archived legacy implementation record
+
+The following records the previous implementation only. Do not implement its paid-tier/monthly-reset rules
+for the target model.
+
 # Stage 4: Core domain and entitlements
 
 ## Status
@@ -119,3 +160,4 @@ Implement the owned resources and policy services required before posts can be g
 - Simple read-then-increment counters can exceed quotas under concurrency.
 - Mixing Telegram transport metadata with domain ownership can make channel migration difficult.
 - Hard-coding plans in controllers would make bot and Web Admin behavior diverge.
+

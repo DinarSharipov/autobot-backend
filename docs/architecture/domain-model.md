@@ -1,8 +1,10 @@
 # Domain model
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 ## Aggregate boundaries
 
-- `User` owns identity, channels, topics, posts, sessions, subscription, and usage.
+- `User` owns identity, channels, topics, posts, sessions, wallets, purchases, and usage.
 - `Post` is a reusable content definition. It is not a publication attempt.
 - `PostVersion` is immutable generated/revised content.
 - `PostSchedule` describes when publication occurrences should be materialized.
@@ -32,8 +34,12 @@ erDiagram
     Publication ||--o{ ModerationRequest : reviews
     PostVersion ||--o| ModerationRequest : reviewed_by
     Publication o|--o| PostVersion : publishes
-    User ||--o{ Subscription : receives
-    SubscriptionPlan ||--o{ Subscription : defines
+    User ||--o{ GenerationWallet : owns
+    GenerationWallet ||--o{ CreditLedgerEntry : records
+    User ||--o{ PurchaseOrder : purchases
+    GenerationPack ||--o{ PurchaseOrder : snapshots
+    PurchaseOrder ||--o{ PaymentEvent : reconciles
+    Publication ||--o| TextRevisionAllowance : includes
     User ||--o{ UsageCounter : tracks
     User ||--o{ IdempotencyRecord : scopes
     UsageCounter ||--o{ UsageLedgerEntry : records
@@ -73,14 +79,17 @@ erDiagram
 - Each idempotent command is unique by principal, operation, and idempotency key in the idempotency store introduced during implementation.
 - Outbox rows are written in the domain transaction and may be retried until delivered.
 
-## Subscription and usage
+## Prepaid balances and generation allowances (target, pending)
 
-- Plan entitlements are structured JSON validated by application schema and exposed as typed read models.
-- The default plan applies when no active paid/trial subscription exists.
-- MVP quota periods are calendar months in UTC; this policy is data/configuration-driven for later evolution.
-- Count entitlements such as channels/topics are calculated from active owned records under transaction/locking.
-- Costly asynchronous operations use `reserve -> commit` on success or `reserve -> release` on terminal failure.
-- Usage ledger operation keys make all three operations idempotent.
+- Separate TEXT/IMAGE wallets have available and reserved integer balances with no monthly reset.
+- Purchased packs are snapshotted in orders; verified successful payments grant credits once.
+- One initial TEXT generation grants three included successful revisions for its generated occurrence.
+  Further revisions debit one TEXT without resetting the included allowance.
+- Every successful image generation/replacement debits one IMAGE. Publication reuses selected media.
+- Ledger and reserve/commit/release operations are idempotent and concurrency-safe.
+- Global active channel/topic caps are independent of pack size and paid tiers.
+- See [generation pack plan](../GENERATION_PACKS_PLAN.md) for migration and payment invariants.
+- Existing Subscription/SubscriptionPlan/monthly UsageCounter schema is legacy until migration.
 
 ## Audit policy
 

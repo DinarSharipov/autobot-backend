@@ -1,5 +1,7 @@
 # IMPLEMENTATION_STATUS.md
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 ## Current status
 
 ### Приёмка 18–19 октября 2026
@@ -126,3 +128,13 @@ Telegram channel.
   formatting, and OpenAPI validation (three pre-existing warnings). Integration services were
   isolated native PostgreSQL 14.19 and Redis 8.0.0; external GPTunnel/Telegram HTTP was mocked.
   Compose interpolation was checked for both default and explicit JSON image parameters.
+
+## Generation packs transition — 2026-10-19
+
+- [x] Product direction and cross-repository plan documented.
+- [ ] Prepaid TEXT/IMAGE balances, orders and payments implemented.
+- [ ] Three included text revisions and paid extra revisions implemented.
+- [ ] Image preview, paid replacement and selected-image reuse implemented.
+- [ ] Legacy migration, client integration and new acceptance checks completed.
+
+Existing checked subscription/usage items above describe legacy implementation only. New billing is not deployed.

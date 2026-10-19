@@ -1,5 +1,7 @@
 # Stage 5: Publication pipeline
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 ## Objective
 
 Deliver the complete durable content lifecycle: generation, versioning, moderation, immediate and scheduled execution, image generation, retries, and direct Telegram publication.

@@ -1,5 +1,7 @@
 # Client integration contracts
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 ## Shared principles
 
 - Backend state is authoritative.
@@ -99,6 +101,4 @@ await fetch(`${apiUrl}/api/v1/topics/${topic.id}`, {
 ```
 
 The bot uses the same resource paths and bodies, but authenticates every request with the ADR 0003
-HMAC headers and omits `X-CSRF-Token`. Clients read limits from `GET /subscription` and current
-calendar-month counters from `GET /usage`; they must treat the backend's entitlement errors as
-authoritative.
+HMAC headers and omits `X-CSRF-Token`. Existing `GET /subscription` and `GET /usage` are legacy contracts. Plan additive/versioned catalogue, wallet, order, ledger, included-revision and operation-cost contracts per [generation packs](../GENERATION_PACKS_PLAN.md); do not assume proposed routes already exist.

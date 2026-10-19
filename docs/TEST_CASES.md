@@ -1258,3 +1258,20 @@ Retest RUN-ID и результат:
 - P1 failures имеют решение и владельца; исключения приёмки перечислены явно.
 - LIVE прогон выполнен в разрешённых каналах; секреты и provider payloads не попали в отчёт.
 - Test cleanup завершён; незавершённые/повторяющиеся тестовые публикации не оставлены активными.
+
+## Generation pack migration acceptance — 2026-10-19 (pending)
+
+Prior subscription/monthly-usage and no-image-preview cases document legacy coverage; they are not acceptance criteria for the target billing model. Use [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md) for replacement requirements. Historical PASS/Готово results remain historical.
+
+| Case | Expected behavior | Status |
+| --- | --- | --- |
+| PACK-001 | Initial text consumes 1 TEXT and grants exactly three included successful revisions | NOT_RUN |
+| PACK-002 | Fourth and later revisions cost 1 TEXT after confirmation; allowance does not reset | NOT_RUN |
+| PACK-003 | Every generated recurring occurrence has its own initial debit and allowance | NOT_RUN |
+| PACK-004 | Every image replacement costs 1 IMAGE; selected preview is reused at publication | NOT_RUN |
+| PACK-005 | Duplicate payment notifications grant credits once; forged/redirect-only confirmation grants none | NOT_RUN |
+| PACK-006 | Concurrent last-credit and last-included-revision requests cannot overspend | NOT_RUN |
+| PACK-007 | Technical failures release reservations; delivery retry does not regenerate or charge again | NOT_RUN |
+| PACK-008 | Purchased balances survive month boundaries; gifts granted once | NOT_RUN |
+| PACK-009 | Insufficient funds blocks the relevant operation; top-up/resume is idempotent | NOT_RUN |
+| PACK-010 | Client views, backend balances and purchase history agree | NOT_RUN |

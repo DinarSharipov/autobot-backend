@@ -1,5 +1,7 @@
 # Stage 1 scenario verification
 
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+
 These walkthroughs validate that the contracts cover the approved MVP flows and failure boundaries.
 
 ## Immediate AUTO
