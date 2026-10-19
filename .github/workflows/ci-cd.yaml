@@ -201,10 +201,6 @@ jobs:
       SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
       GHCR_USER: ${{ github.repository_owner }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      AUTOBOT_DB_PASSWORD: ${{ secrets.AUTOBOT_DB_PASSWORD }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      BOT_SERVICE_ACTIVE_KEY_ID: ${{ vars.BOT_SERVICE_ACTIVE_KEY_ID }}
-      BOT_SERVICE_ACTIVE_SECRET: ${{ secrets.BOT_SERVICE_ACTIVE_SECRET }}
       YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID }}
       YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
     steps:
@@ -216,10 +212,10 @@ jobs:
         with:
           node-version: 24.15.0
 
-      - name: Render protected production environment
+      - name: Render protected YooKassa environment
         env:
-          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-production.env
-        run: node scripts/ci/render-production-env.mjs "$PRODUCTION_ENV_FILE"
+          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-yookassa.env
+        run: node scripts/ci/render-yookassa-env.mjs "$PRODUCTION_ENV_FILE"
 
       - name: Deploy backend containers
         env:

@@ -24,15 +24,18 @@ and must not be removed by either deployment.
 ## GitHub Environment
 
 GitHub publishes immutable images and deploys them through SSH using the protected `production`
-environment. It renders the server `.env` from Environment secrets, applies migrations, updates
-only the backend containers, and keeps the bot project untouched. The production job then waits
-until health reports the pushed commit SHA and verifies OpenAPI. The server-side updater remains a
-recovery path for image updates that do not require changing runtime secrets.
+environment. Runtime secrets other than YooKassa remain only in the server `.env`; the workflow
+renders a mode-`0600` YooKassa-only fragment and merges it on the server without reading or logging
+the existing values. It then applies migrations, updates only the backend containers, and keeps the
+bot project untouched. The production job waits until health reports the pushed commit SHA and
+verifies OpenAPI. The server-side updater remains a recovery path for image updates that do not
+require changing runtime secrets.
 
 Create the `production` environment in `DinarSharipov/autobot-backend`, restrict it to `dev`, and
 optionally set `API_PUBLIC_URL`. The workflow uses the current production URL by default. During a
-deployment it renders a mode-`0600` `.env` from GitHub Environment secrets, transfers it over SSH,
-and verifies only the presence of the YooKassa variables in `autobot-api`.
+deployment it renders a mode-`0600` YooKassa-only environment fragment, transfers it over SSH,
+merges it into the server environment, and verifies only the presence of the YooKassa variables in
+`autobot-api`.
 
 The following GitHub Environment values are required by the SSH deployment:
 

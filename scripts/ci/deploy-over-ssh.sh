@@ -9,6 +9,8 @@ required=(
   GHCR_USER
   GHCR_TOKEN
   PRODUCTION_ENV_FILE
+  YOOKASSA_SHOP_ID
+  YOOKASSA_SECRET_KEY
 )
 
 missing=()
@@ -74,11 +76,12 @@ deploy_root='/opt/autobot/backend'
   compose.prod.yaml \
   Caddyfile \
   scripts/deploy/backend-deploy.sh \
+  scripts/deploy/merge-yookassa-env.sh \
   "$remote:$deploy_root/"
 
 "${scp_prefix[@]}" scp "${scp_options[@]}" \
   "$PRODUCTION_ENV_FILE" \
-  "$remote:$deploy_root/.env.next"
+  "$remote:$deploy_root/.env.yookassa.next"
 
 printf '%s' "$GHCR_TOKEN" | "${ssh_prefix[@]}" ssh "${ssh_options[@]}" "$remote" \
-  "cd '$deploy_root' && GHCR_USER='$GHCR_USER' bash ./backend-deploy.sh"
+  "cd '$deploy_root' && bash ./merge-yookassa-env.sh && GHCR_USER='$GHCR_USER' bash ./backend-deploy.sh"
