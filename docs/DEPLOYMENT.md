@@ -52,6 +52,9 @@ Environment secrets:
 - `YOOKASSA_SHOP_ID`
 - `YOOKASSA_SECRET_KEY`
 
+Set `YOOKASSA_RETURN_URL` as a non-secret server runtime variable for test checkout. A redirect to
+this URL never confirms payment; fulfillment requires a verified provider status or webhook.
+
 Environment variables:
 
 - `API_PUBLIC_URL`

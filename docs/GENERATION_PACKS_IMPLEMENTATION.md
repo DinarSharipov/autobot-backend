@@ -116,8 +116,9 @@ reference и optimistic version. `PostVersion` остаётся текстовы
    `PREPAID_GENERATION_ENABLED=false`.
 2. Провести dry-run миграции на snapshot production: инвентаризация subscriptions/counters/in-flight
    jobs, проверка foreign keys, план rollback и ручное решение по conversion policy.
-3. Выдать onboarding gift отдельной idempotent job только после утверждения policy. Не выдавать его
-   из login handler синхронно.
+3. Onboarding gift выдаётся идемпотентно при первом чтении кошелька (`GET /wallets`): две записи
+   `GIFT` имеют стабильные operation keys, поэтому повторные запросы не начисляют кредиты второй раз.
+   В login handler эта логика не вызывается.
 4. Перевести новый bot-клиент на preview/confirmation и wallet API; затем включить flag для
    ограниченной группы пользователей.
 5. Добавить unit, integration, webhook-contract и acceptance случаи: последний credit, три
@@ -136,3 +137,10 @@ reference и optimistic version. `PostVersion` остаётся текстовы
 - Канал/чат для private image preview и срок жизни/обработка потери Telegram file_id.
 - Политика provider-cost accounting, налогов и комиссий: пользовательский credit ledger и расходы
   GPTunnel должны оставаться раздельными.
+
+## Канал оплаты
+
+Для тестового checkout подготовлен YooKassa redirect adapter boundary и конфигурация return URL,
+но production checkout выключен. Решение о production-канале (YooKassa redirect или Telegram Stars)
+остаётся `pending decision`: до подтверждения требований Telegram для цифровых услуг нельзя включать
+YooKassa в production. Redirect URL сам по себе не подтверждает платёж и не начисляет кредиты.

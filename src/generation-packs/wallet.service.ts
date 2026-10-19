@@ -57,6 +57,7 @@ export class WalletService {
   }
 
   async balances(userId: string): Promise<WalletBalance[]> {
+    await this.grantOnboardingGift(userId);
     const wallets = await this.prisma.generationWallet.findMany({
       where: { userId },
       select: { creditType: true, available: true, reserved: true, version: true },
@@ -71,6 +72,27 @@ export class WalletService {
         version: wallet?.version ?? 0,
       };
     });
+  }
+
+  async grantOnboardingGift(userId: string): Promise<void> {
+    await Promise.all([
+      this.grant({
+        userId,
+        creditType: CreditType.TEXT,
+        units: 3,
+        operationKey: `onboarding:${userId}:text`,
+        kind: 'GIFT',
+        metadata: { reason: 'onboarding' },
+      }),
+      this.grant({
+        userId,
+        creditType: CreditType.IMAGE,
+        units: 1,
+        operationKey: `onboarding:${userId}:image`,
+        kind: 'GIFT',
+        metadata: { reason: 'onboarding' },
+      }),
+    ]);
   }
 
   async ledger(userId: string, creditType?: CreditType, limit = 50) {

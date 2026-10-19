@@ -29,6 +29,7 @@
     "prisma:format": "prisma format",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "generation-packs:provision": "tsx scripts/provision-generation-packs.mjs",
     "docker:up": "docker compose -f compose.yaml -f compose.dev.yaml up -d --build",
     "docker:down": "docker compose -f compose.yaml -f compose.dev.yaml down",
     "test:acceptance": "vitest run --config vitest.acceptance.config.ts"

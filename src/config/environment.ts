@@ -74,6 +74,7 @@ const environmentSchema = z
     PREPAID_GENERATION_ENABLED: environmentBoolean.default(false),
     YOOKASSA_SHOP_ID: optionalNonEmptyString,
     YOOKASSA_SECRET_KEY: optionalNonEmptyString,
+    YOOKASSA_RETURN_URL: optionalUrl,
     GPTUNNEL_IMAGE_PARAMS: z.preprocess(
       (value) => {
         if (value === undefined || value === '') return {};

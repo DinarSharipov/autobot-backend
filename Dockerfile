@@ -19,7 +19,9 @@ FROM dependencies AS migration
 WORKDIR /app
 COPY prisma.config.ts ./
 COPY prisma ./prisma
-CMD ["npm", "run", "prisma:migrate:deploy"]
+COPY src/generated ./src/generated
+COPY scripts/provision-generation-packs.mjs ./scripts/provision-generation-packs.mjs
+CMD ["sh", "-c", "npm run prisma:migrate:deploy && npm run generation-packs:provision"]
 
 FROM node:24-alpine AS runtime
 ENV NODE_ENV=production
