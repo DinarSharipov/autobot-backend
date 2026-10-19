@@ -4,6 +4,8 @@ services:
     pull_policy: always
     environment:
       DATABASE_URL: ${AUTOBOT_DATABASE_URL:?AUTOBOT_DATABASE_URL is required}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:?YOOKASSA_SHOP_ID is required}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:?YOOKASSA_SECRET_KEY is required}
 
   autobot-migrate:
     image: ${AUTOBOT_MIGRATION_IMAGE:?AUTOBOT_MIGRATION_IMAGE is required}

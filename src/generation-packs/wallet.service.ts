@@ -1,0 +1,302 @@
+import { HttpStatus, Injectable } from '@nestjs/common';
+
+import {
+  CreditLedgerKind,
+  CreditType,
+  type Prisma,
+  ReservationStatus,
+} from '../generated/prisma/client.js';
+import { serializableTransaction } from '../common/database/serializable-transaction.js';
+import { ApiHttpException } from '../common/http/api-http.exception.js';
+import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
+
+export type CreditMutation = {
+  userId: string;
+  creditType: CreditType;
+  units: number;
+  operationKey: string;
+  publicationId?: string;
+  aiRequestId?: string;
+  metadata?: Prisma.InputJsonValue;
+};
+
+export type WalletBalance = {
+  creditType: CreditType;
+  available: number;
+  reserved: number;
+  version: number;
+};
+
+export type CreditGrant = {
+  userId: string;
+  creditType: CreditType;
+  units: number;
+  operationKey: string;
+  kind: Extract<CreditLedgerKind, 'GIFT' | 'PURCHASE' | 'REFUND' | 'ADJUSTMENT'>;
+  purchaseOrderId?: string;
+  metadata?: Prisma.InputJsonValue;
+};
+
+@Injectable()
+export class WalletService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listPacks(creditType?: CreditType) {
+    return this.prisma.generationPack.findMany({
+      where: { isActive: true, ...(creditType ? { creditType } : {}) },
+      orderBy: [{ creditType: 'asc' }, { units: 'asc' }, { priceMinor: 'asc' }],
+      select: {
+        code: true,
+        creditType: true,
+        units: true,
+        priceMinor: true,
+        currency: true,
+        version: true,
+      },
+    });
+  }
+
+  async balances(userId: string): Promise<WalletBalance[]> {
+    const wallets = await this.prisma.generationWallet.findMany({
+      where: { userId },
+      select: { creditType: true, available: true, reserved: true, version: true },
+    });
+    const byType = new Map(wallets.map((wallet) => [wallet.creditType, wallet]));
+    return Object.values(CreditType).map((creditType) => {
+      const wallet = byType.get(creditType);
+      return {
+        creditType,
+        available: wallet?.available ?? 0,
+        reserved: wallet?.reserved ?? 0,
+        version: wallet?.version ?? 0,
+      };
+    });
+  }
+
+  async ledger(userId: string, creditType?: CreditType, limit = 50) {
+    return this.prisma.creditLedgerEntry.findMany({
+      where: { wallet: { userId, ...(creditType ? { creditType } : {}) } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: {
+        kind: true,
+        units: true,
+        operationKey: true,
+        publicationId: true,
+        purchaseOrderId: true,
+        createdAt: true,
+        wallet: { select: { creditType: true } },
+      },
+    });
+  }
+
+  reserve(input: CreditMutation) {
+    return this.mutate(input, 'reserve');
+  }
+
+  commit(input: CreditMutation) {
+    return this.mutate(input, 'commit');
+  }
+
+  release(input: CreditMutation) {
+    return this.mutate(input, 'release');
+  }
+
+  async grant(input: CreditGrant): Promise<WalletBalance> {
+    this.assertInput(input);
+    return serializableTransaction(this.prisma, async (transaction) => {
+      const wallet = await transaction.generationWallet.upsert({
+        where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
+        create: { userId: input.userId, creditType: input.creditType },
+        update: {},
+      });
+      const existing = await transaction.creditLedgerEntry.findUnique({
+        where: { walletId_operationKey: { walletId: wallet.id, operationKey: input.operationKey } },
+      });
+      if (existing) {
+        if (existing.kind !== input.kind || existing.units !== input.units) {
+          throw new ApiHttpException(
+            HttpStatus.CONFLICT,
+            'CREDIT_OPERATION_KEY_REUSED',
+            'The credit operation key was reused with different parameters.',
+          );
+        }
+        return this.balance(wallet);
+      }
+      const updated = await transaction.generationWallet.update({
+        where: { id: wallet.id },
+        data: { available: { increment: input.units }, version: { increment: 1 } },
+      });
+      await transaction.creditLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          kind: input.kind,
+          units: input.units,
+          operationKey: input.operationKey,
+          ...(input.purchaseOrderId ? { purchaseOrderId: input.purchaseOrderId } : {}),
+          ...(input.metadata ? { metadata: input.metadata } : {}),
+        },
+      });
+      return this.balance(updated);
+    });
+  }
+
+  private async mutate(input: CreditMutation, action: 'reserve' | 'commit' | 'release') {
+    this.assertInput(input);
+    return serializableTransaction(this.prisma, async (transaction) => {
+      const existing = await transaction.generationReservation.findUnique({
+        where: { operationKey: input.operationKey },
+        include: { wallet: true },
+      });
+      if (existing) return this.settleExisting(transaction, existing, input, action);
+
+      if (action !== 'reserve') {
+        throw new ApiHttpException(
+          HttpStatus.CONFLICT,
+          'CREDIT_RESERVATION_NOT_FOUND',
+          'The credit reservation does not exist.',
+        );
+      }
+
+      const wallet = await transaction.generationWallet.upsert({
+        where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
+        create: { userId: input.userId, creditType: input.creditType },
+        update: {},
+      });
+      if (wallet.available < input.units) {
+        throw new ApiHttpException(
+          HttpStatus.CONFLICT,
+          input.creditType === 'TEXT' ? 'INSUFFICIENT_TEXT_CREDITS' : 'INSUFFICIENT_IMAGE_CREDITS',
+          'There are not enough prepaid generation credits.',
+          { available: wallet.available, required: input.units },
+        );
+      }
+
+      const updated = await transaction.generationWallet.update({
+        where: { id: wallet.id },
+        data: {
+          available: { decrement: input.units },
+          reserved: { increment: input.units },
+          version: { increment: 1 },
+        },
+      });
+      const reservation = await transaction.generationReservation.create({
+        data: {
+          userId: input.userId,
+          walletId: wallet.id,
+          creditType: input.creditType,
+          units: input.units,
+          operationKey: input.operationKey,
+          ...(input.publicationId ? { publicationId: input.publicationId } : {}),
+          ...(input.aiRequestId ? { aiRequestId: input.aiRequestId } : {}),
+          ...(input.metadata ? { metadata: input.metadata } : {}),
+        },
+      });
+      await transaction.creditLedgerEntry.create({
+        data: {
+          walletId: wallet.id,
+          kind: CreditLedgerKind.RESERVE,
+          units: input.units,
+          operationKey: `${input.operationKey}:reserve`,
+          reservationId: reservation.id,
+          ...(input.publicationId ? { publicationId: input.publicationId } : {}),
+          ...(input.metadata ? { metadata: input.metadata } : {}),
+        },
+      });
+      return this.balance(updated);
+    });
+  }
+
+  private async settleExisting(
+    transaction: Prisma.TransactionClient,
+    reservation: {
+      id: string;
+      userId: string;
+      creditType: CreditType;
+      units: number;
+      status: ReservationStatus;
+      wallet: {
+        id: string;
+        available: number;
+        reserved: number;
+        version: number;
+        creditType: CreditType;
+      };
+    },
+    input: CreditMutation,
+    action: 'reserve' | 'commit' | 'release',
+  ) {
+    if (
+      reservation.userId !== input.userId ||
+      reservation.creditType !== input.creditType ||
+      reservation.units !== input.units
+    ) {
+      throw new ApiHttpException(
+        HttpStatus.CONFLICT,
+        'CREDIT_OPERATION_KEY_REUSED',
+        'The credit operation key was reused with different parameters.',
+      );
+    }
+    if (action === 'reserve') return this.balance(reservation.wallet);
+
+    const targetStatus =
+      action === 'commit' ? ReservationStatus.COMMITTED : ReservationStatus.RELEASED;
+    if (reservation.status === targetStatus) return this.balance(reservation.wallet);
+    if (reservation.status !== ReservationStatus.RESERVED) {
+      throw new ApiHttpException(
+        HttpStatus.CONFLICT,
+        'CREDIT_RESERVATION_ALREADY_SETTLED',
+        'The credit reservation has already been settled.',
+      );
+    }
+
+    const wallet = await transaction.generationWallet.update({
+      where: { id: reservation.wallet.id },
+      data: {
+        ...(action === 'release' ? { available: { increment: input.units } } : {}),
+        reserved: { decrement: input.units },
+        version: { increment: 1 },
+      },
+    });
+    await transaction.generationReservation.update({
+      where: { id: reservation.id },
+      data: { status: targetStatus, settledAt: new Date() },
+    });
+    await transaction.creditLedgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        kind: action === 'commit' ? CreditLedgerKind.COMMIT : CreditLedgerKind.RELEASE,
+        units: input.units,
+        operationKey: `${input.operationKey}:${action}`,
+        reservationId: reservation.id,
+      },
+    });
+    return this.balance(wallet);
+  }
+
+  private assertInput(input: Pick<CreditMutation, 'units' | 'operationKey'>): void {
+    if (!Number.isSafeInteger(input.units) || input.units <= 0) {
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'INVALID_CREDIT_AMOUNT',
+        'Credit units must be a positive integer.',
+      );
+    }
+    if (input.operationKey.length < 1 || input.operationKey.length > 255) {
+      throw new ApiHttpException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'INVALID_CREDIT_OPERATION_KEY',
+        'Credit operation key must contain 1 to 255 characters.',
+      );
+    }
+  }
+
+  private balance(wallet: {
+    creditType: CreditType;
+    available: number;
+    reserved: number;
+    version: number;
+  }): WalletBalance {
+    return wallet;
+  }
+}

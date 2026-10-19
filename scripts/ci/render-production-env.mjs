@@ -16,6 +16,8 @@ const required = [
   'TELEGRAM_BOT_TOKEN',
   'BOT_SERVICE_ACTIVE_KEY_ID',
   'BOT_SERVICE_ACTIVE_SECRET',
+  'YOOKASSA_SHOP_ID',
+  'YOOKASSA_SECRET_KEY',
 ];
 
 const missing = required.filter((name) => !process.env[name]?.trim());
@@ -102,6 +104,8 @@ const values = {
   SESSION_COOKIE_SECURE: 'true',
   BOT_SERVICE_ACTIVE_KEY_ID: process.env.BOT_SERVICE_ACTIVE_KEY_ID,
   BOT_SERVICE_ACTIVE_SECRET: process.env.BOT_SERVICE_ACTIVE_SECRET,
+  YOOKASSA_SHOP_ID: process.env.YOOKASSA_SHOP_ID,
+  YOOKASSA_SECRET_KEY: process.env.YOOKASSA_SECRET_KEY,
 };
 
 const contents = `${Object.entries(values)

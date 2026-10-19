@@ -114,6 +114,56 @@ enum UsageEntryKind {
   ADJUST
 }
 
+enum CreditType {
+  TEXT
+  IMAGE
+}
+
+enum CreditLedgerKind {
+  GIFT
+  PURCHASE
+  RESERVE
+  COMMIT
+  RELEASE
+  REFUND
+  ADJUSTMENT
+}
+
+enum ReservationStatus {
+  RESERVED
+  COMMITTED
+  RELEASED
+}
+
+enum PurchaseOrderStatus {
+  PENDING
+  AWAITING_PAYMENT
+  PAID
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum PaymentEventStatus {
+  RECEIVED
+  VERIFIED
+  REJECTED
+  PROCESSED
+}
+
+enum MediaStatus {
+  PENDING
+  READY
+  SELECTED
+  REJECTED
+  UNAVAILABLE
+}
+
+enum GenerationFundingStatus {
+  READY
+  BLOCKED_FUNDS
+}
+
 enum AIRequestKind {
   TEXT
   IMAGE
@@ -141,25 +191,30 @@ enum AuditActorType {
 }
 
 model User {
-  id                  String              @id @default(uuid()) @db.Uuid
-  status              UserStatus          @default(ACTIVE)
-  locale              String              @default("ru")
-  timezone            String              @default("UTC")
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  deletedAt           DateTime?
-  telegramAccount     TelegramAccount?
-  authIdentities      AuthIdentity[]
-  sessions            Session[]
-  channels            Channel[]
-  topics              Topic[]
-  posts               Post[]
-  subscriptions       Subscription[]
-  usageCounters       UsageCounter[]
-  aiRequests          AIRequest[]
-  moderationDecisions ModerationRequest[] @relation("ModerationDecisionActor")
-  auditEvents         AuditEvent[]
-  idempotencyRecords  IdempotencyRecord[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  status                 UserStatus              @default(ACTIVE)
+  locale                 String                  @default("ru")
+  timezone               String                  @default("UTC")
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  deletedAt              DateTime?
+  telegramAccount        TelegramAccount?
+  authIdentities         AuthIdentity[]
+  sessions               Session[]
+  channels               Channel[]
+  topics                 Topic[]
+  posts                  Post[]
+  subscriptions          Subscription[]
+  usageCounters          UsageCounter[]
+  aiRequests             AIRequest[]
+  moderationDecisions    ModerationRequest[]     @relation("ModerationDecisionActor")
+  auditEvents            AuditEvent[]
+  idempotencyRecords     IdempotencyRecord[]
+  generationWallets      GenerationWallet[]
+  generationReservations GenerationReservation[]
+  textRevisionAllowances TextRevisionAllowance[]
+  purchaseOrders         PurchaseOrder[]
+  paymentEvents          PaymentEvent[]
 
   @@index([status])
 }
@@ -326,36 +381,202 @@ model PostSchedule {
 }
 
 model Publication {
-  id                 String              @id @default(uuid()) @db.Uuid
-  postId             String              @db.Uuid
-  scheduleId         String?             @db.Uuid
-  selectedVersionId  String?             @unique @db.Uuid
-  idempotencyKey     String?             @unique
-  scheduledFor       DateTime
-  definition         Json?
-  imageUsageKey      String?
-  status             PublicationStatus   @default(PENDING)
-  attemptCount       Int                 @default(0)
-  nextAttemptAt      DateTime?
-  telegramChatId     BigInt?
-  telegramMessageId  BigInt?
-  publishedWithImage Boolean             @default(false)
-  errorCode          String?
-  errorDetails       Json?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  publishedAt        DateTime?
-  post               Post                @relation(fields: [postId], references: [id], onDelete: Restrict)
-  schedule           PostSchedule?       @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
-  versions           PostVersion[]       @relation("PublicationVersions")
-  selectedVersion    PostVersion?        @relation("SelectedPublicationVersion", fields: [selectedVersionId], references: [id], onDelete: Restrict)
-  moderationRequests ModerationRequest[]
-  aiRequests         AIRequest[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  postId                 String                  @db.Uuid
+  scheduleId             String?                 @db.Uuid
+  selectedVersionId      String?                 @unique @db.Uuid
+  idempotencyKey         String?                 @unique
+  scheduledFor           DateTime
+  definition             Json?
+  imageUsageKey          String?
+  fundingStatus          GenerationFundingStatus @default(READY)
+  selectedMediaId        String?                 @unique @db.Uuid
+  version                Int                     @default(1)
+  status                 PublicationStatus       @default(PENDING)
+  attemptCount           Int                     @default(0)
+  nextAttemptAt          DateTime?
+  telegramChatId         BigInt?
+  telegramMessageId      BigInt?
+  publishedWithImage     Boolean                 @default(false)
+  errorCode              String?
+  errorDetails           Json?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  publishedAt            DateTime?
+  post                   Post                    @relation(fields: [postId], references: [id], onDelete: Restrict)
+  schedule               PostSchedule?           @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  versions               PostVersion[]           @relation("PublicationVersions")
+  selectedVersion        PostVersion?            @relation("SelectedPublicationVersion", fields: [selectedVersionId], references: [id], onDelete: Restrict)
+  moderationRequests     ModerationRequest[]
+  aiRequests             AIRequest[]
+  generationReservations GenerationReservation[]
+  textRevisionAllowance  TextRevisionAllowance?
+  creditLedgerEntries    CreditLedgerEntry[]
+  media                  PublicationMedia[]      @relation("PublicationMediaVersions")
+  selectedMedia          PublicationMedia?       @relation("SelectedPublicationMedia", fields: [selectedMediaId], references: [id], onDelete: Restrict)
 
   @@unique([scheduleId, scheduledFor])
   @@unique([telegramChatId, telegramMessageId])
   @@index([status, nextAttemptAt])
   @@index([postId, createdAt])
+}
+
+model GenerationWallet {
+  id            String                  @id @default(uuid()) @db.Uuid
+  userId        String                  @db.Uuid
+  creditType    CreditType
+  available     Int                     @default(0)
+  reserved      Int                     @default(0)
+  version       Int                     @default(1)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntries CreditLedgerEntry[]
+  reservations  GenerationReservation[]
+
+  @@unique([userId, creditType])
+  @@index([userId])
+}
+
+model CreditLedgerEntry {
+  id              String                 @id @default(uuid()) @db.Uuid
+  walletId        String                 @db.Uuid
+  kind            CreditLedgerKind
+  units           Int
+  operationKey    String
+  reservationId   String?                @db.Uuid
+  publicationId   String?                @db.Uuid
+  purchaseOrderId String?                @db.Uuid
+  metadata        Json?
+  createdAt       DateTime               @default(now())
+  wallet          GenerationWallet       @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  reservation     GenerationReservation? @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  publication     Publication?           @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([walletId, operationKey])
+  @@index([walletId, createdAt])
+  @@index([publicationId, createdAt])
+  @@index([purchaseOrderId])
+}
+
+model GenerationReservation {
+  id            String              @id @default(uuid()) @db.Uuid
+  userId        String              @db.Uuid
+  walletId      String              @db.Uuid
+  creditType    CreditType
+  units         Int
+  operationKey  String              @unique
+  status        ReservationStatus   @default(RESERVED)
+  publicationId String?             @db.Uuid
+  aiRequestId   String?             @unique @db.Uuid
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  settledAt     DateTime?
+  user          User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet        GenerationWallet    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  publication   Publication?        @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  aiRequest     AIRequest?          @relation(fields: [aiRequestId], references: [id], onDelete: Restrict)
+  ledgerEntries CreditLedgerEntry[]
+
+  @@index([userId, status, createdAt])
+  @@index([publicationId, status])
+}
+
+model TextRevisionAllowance {
+  id                String      @id @default(uuid()) @db.Uuid
+  userId            String      @db.Uuid
+  publicationId     String      @unique @db.Uuid
+  includedTotal     Int         @default(3)
+  includedCommitted Int         @default(0)
+  includedReserved  Int         @default(0)
+  version           Int         @default(1)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  user              User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  publication       Publication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+}
+
+model GenerationPack {
+  id             String          @id @default(uuid()) @db.Uuid
+  code           String          @unique
+  creditType     CreditType
+  units          Int
+  priceMinor     Int
+  currency       String          @default("RUB")
+  version        Int             @default(1)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+
+  @@index([creditType, isActive])
+}
+
+model PurchaseOrder {
+  id              String              @id @default(uuid()) @db.Uuid
+  userId          String              @db.Uuid
+  packId          String              @db.Uuid
+  idempotencyKey  String
+  status          PurchaseOrderStatus @default(PENDING)
+  creditType      CreditType
+  units           Int
+  priceMinor      Int
+  currency        String
+  packVersion     Int
+  provider        String?
+  providerOrderId String?             @unique
+  paymentUrl      String?
+  expiresAt       DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pack            GenerationPack      @relation(fields: [packId], references: [id], onDelete: Restrict)
+  paymentEvents   PaymentEvent[]
+  ledgerEntries   CreditLedgerEntry[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, status, createdAt])
+}
+
+model PaymentEvent {
+  id              String             @id @default(uuid()) @db.Uuid
+  userId          String?            @db.Uuid
+  purchaseOrderId String?            @db.Uuid
+  provider        String
+  providerEventId String
+  status          PaymentEventStatus @default(RECEIVED)
+  payloadHash     String
+  payload         Json
+  createdAt       DateTime           @default(now())
+  processedAt     DateTime?
+  user            User?              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  purchaseOrder   PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerEventId])
+  @@index([purchaseOrderId, createdAt])
+}
+
+model PublicationMedia {
+  id                     String       @id @default(uuid()) @db.Uuid
+  publicationId          String       @db.Uuid
+  status                 MediaStatus  @default(PENDING)
+  telegramChatId         BigInt?
+  telegramMessageId      BigInt?
+  telegramFileId         String?
+  telegramFileUniqueId   String?
+  generationOperationKey String?      @unique
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  approvedAt             DateTime?
+  publication            Publication  @relation("PublicationMediaVersions", fields: [publicationId], references: [id], onDelete: Restrict)
+  selectedForPublication Publication? @relation("SelectedPublicationMedia")
+
+  @@unique([telegramChatId, telegramMessageId])
+  @@index([publicationId, status, createdAt])
 }
 
 model ModerationRequest {
@@ -456,27 +677,28 @@ model IdempotencyRecord {
 }
 
 model AIRequest {
-  id                String          @id @default(uuid()) @db.Uuid
-  userId            String          @db.Uuid
-  postId            String?         @db.Uuid
-  publicationId     String?         @db.Uuid
-  kind              AIRequestKind
-  provider          String
-  model             String
-  status            AIRequestStatus @default(PENDING)
-  providerRequestId String?
-  inputUnits        Int?
-  outputUnits       Int?
-  costMinor         Int?
-  currency          String?
-  errorCode         String?
-  createdAt         DateTime        @default(now())
-  startedAt         DateTime?
-  completedAt       DateTime?
-  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  post              Post?           @relation(fields: [postId], references: [id], onDelete: Restrict)
-  publication       Publication?    @relation(fields: [publicationId], references: [id], onDelete: Restrict)
-  generatedVersion  PostVersion?
+  id                    String                 @id @default(uuid()) @db.Uuid
+  userId                String                 @db.Uuid
+  postId                String?                @db.Uuid
+  publicationId         String?                @db.Uuid
+  kind                  AIRequestKind
+  provider              String
+  model                 String
+  status                AIRequestStatus        @default(PENDING)
+  providerRequestId     String?
+  inputUnits            Int?
+  outputUnits           Int?
+  costMinor             Int?
+  currency              String?
+  errorCode             String?
+  createdAt             DateTime               @default(now())
+  startedAt             DateTime?
+  completedAt           DateTime?
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  post                  Post?                  @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publication           Publication?           @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  generatedVersion      PostVersion?
+  generationReservation GenerationReservation?
 
   @@index([userId, createdAt])
   @@index([publicationId, status])

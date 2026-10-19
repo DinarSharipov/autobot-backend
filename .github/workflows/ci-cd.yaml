@@ -173,7 +173,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=migration
 
   deploy:
-    name: Verify production deployment
+    name: Deploy production
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/dev'
     needs: [containers]
     runs-on: ubuntu-latest
@@ -186,10 +186,46 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
+      packages: read
     env:
       API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL || 'https://autobot.45.131.135.15.sslip.io' }}
       EXPECTED_SHA: ${{ github.sha }}
+      AUTOBOT_API_IMAGE: ${{ needs.containers.outputs.api-image }}
+      AUTOBOT_MIGRATION_IMAGE: ${{ needs.containers.outputs.migration-image }}
+      BUILD_SHA: ${{ github.sha }}
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_PORT: ${{ secrets.SERVER_PORT }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+      GHCR_USER: ${{ github.repository_owner }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AUTOBOT_DB_PASSWORD: ${{ secrets.AUTOBOT_DB_PASSWORD }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      BOT_SERVICE_ACTIVE_KEY_ID: ${{ vars.BOT_SERVICE_ACTIVE_KEY_ID }}
+      BOT_SERVICE_ACTIVE_SECRET: ${{ secrets.BOT_SERVICE_ACTIVE_SECRET }}
+      YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID }}
+      YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.15.0
+
+      - name: Render protected production environment
+        env:
+          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-production.env
+        run: node scripts/ci/render-production-env.mjs "$PRODUCTION_ENV_FILE"
+
+      - name: Deploy backend containers
+        env:
+          PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-production.env
+        run: bash scripts/ci/deploy-over-ssh.sh
+
       - name: Wait for server pull deployment
         shell: bash
         run: |

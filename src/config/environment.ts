@@ -71,6 +71,9 @@ const environmentSchema = z
       .default(500 * 1024 * 1024),
     GPTUNNEL_API_KEY: optionalNonEmptyString,
     GPTUNNEL_USE_WALLET_BALANCE: environmentBoolean.default(false),
+    PREPAID_GENERATION_ENABLED: environmentBoolean.default(false),
+    YOOKASSA_SHOP_ID: optionalNonEmptyString,
+    YOOKASSA_SECRET_KEY: optionalNonEmptyString,
     GPTUNNEL_IMAGE_PARAMS: z.preprocess(
       (value) => {
         if (value === undefined || value === '') return {};
@@ -280,6 +283,22 @@ const environmentSchema = z
           code: 'custom',
           path: ['TELEGRAM_BOT_TOKEN'],
           message: 'Telegram bot token is required in production',
+        });
+      }
+
+      if (!environment.YOOKASSA_SHOP_ID) {
+        context.addIssue({
+          code: 'custom',
+          path: ['YOOKASSA_SHOP_ID'],
+          message: 'is required in production',
+        });
+      }
+
+      if (!environment.YOOKASSA_SECRET_KEY) {
+        context.addIssue({
+          code: 'custom',
+          path: ['YOOKASSA_SECRET_KEY'],
+          message: 'is required in production',
         });
       }
 

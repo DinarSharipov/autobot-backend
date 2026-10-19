@@ -4,9 +4,12 @@
 
 Approved product direction. This document replaces subscription tiers, monthly generation quotas,
 subscription-gated moderation/images, and previous restrictions excluding image review.
-Implementation and migration are PENDING; existing subscription code is legacy, not evidence that
-prepaid balances already work. Historical test results describe the code tested at that time.
+Implementation and migration are IN PROGRESS; existing subscription code is legacy, not evidence that
+prepaid balances already work in production. Historical test results describe the code tested at that time.
 Web Admin implementation, deployment, and activation remain postponed.
+
+Concrete backend changes, migration sequencing and API work are recorded in
+[GENERATION_PACKS_IMPLEMENTATION.md](GENERATION_PACKS_IMPLEMENTATION.md).
 
 ## Product and commercial rules
 
@@ -118,7 +121,7 @@ price and catalogue version. Documentation does not enable live checkout.
 ## Backend delivery plan
 
 - [ ] Finalize billing, allowance and selected-image OpenAPI/domain contracts before client implementation.
-- [ ] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
+- [x] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
 - [ ] Replace subscription-gated policies and monthly quotas with prepaid credits and global resource caps.
 - [ ] Implement one initial TEXT debit plus three included revisions and paid revisions thereafter.
 - [ ] Make recurring occurrence, failure, cancellation, retry and insufficient-funds accounting atomic.
@@ -127,7 +130,7 @@ price and catalogue version. Documentation does not enable live checkout.
 - [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
 - [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
 - [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-  build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
 
 ## Detailed purchase delivery tasks

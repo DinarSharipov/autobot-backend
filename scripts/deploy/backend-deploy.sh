@@ -47,6 +47,14 @@ trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
 for _ in $(seq 1 30); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' autobot-api 2>/dev/null || true)"
   if [[ "$health" == 'healthy' ]]; then
+    for name in YOOKASSA_SHOP_ID YOOKASSA_SECRET_KEY; do
+      if ! docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' autobot-api \
+        | grep --quiet --extended-regexp "^${name}=.+$"; then
+        echo "Required backend environment variable is absent: ${name}" >&2
+        exit 1
+      fi
+    done
+    echo 'Verified YooKassa credentials are present in autobot-api'
     "${compose[@]}" up -d --no-build autobot-proxy
     "${compose[@]}" ps
     exit 0

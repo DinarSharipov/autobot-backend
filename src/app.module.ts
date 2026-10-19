@@ -23,6 +23,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module.js';
 import { TopicsModule } from './topics/topics.module.js';
 import { PublishingModule } from './publishing/publishing.module.js';
 import { ObservabilityModule } from './common/observability/observability.module.js';
+import { GenerationPacksModule } from './generation-packs/generation-packs.module.js';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { ObservabilityModule } from './common/observability/observability.module
     ImageTempModule,
     AuthModule,
     SubscriptionsModule,
+    GenerationPacksModule,
     ChannelsModule,
     TopicsModule,
     PostsModule,

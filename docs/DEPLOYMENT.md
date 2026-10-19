@@ -23,15 +23,18 @@ and must not be removed by either deployment.
 
 ## GitHub Environment
 
-The default deployment does not store SSH or runtime secrets in GitHub. GitHub publishes the
-`:dev` images; `autobot-backend-update.timer` on the server detects a new image revision, applies
-migrations, updates only the backend containers, and keeps the bot project untouched. The GitHub
-production job waits until health reports the pushed commit SHA and then verifies OpenAPI.
+GitHub publishes immutable images and deploys them through SSH using the protected `production`
+environment. It renders the server `.env` from Environment secrets, applies migrations, updates
+only the backend containers, and keeps the bot project untouched. The production job then waits
+until health reports the pushed commit SHA and verifies OpenAPI. The server-side updater remains a
+recovery path for image updates that do not require changing runtime secrets.
 
 Create the `production` environment in `DinarSharipov/autobot-backend`, restrict it to `dev`, and
-optionally set `API_PUBLIC_URL`. The workflow uses the current production URL by default.
+optionally set `API_PUBLIC_URL`. The workflow uses the current production URL by default. During a
+deployment it renders a mode-`0600` `.env` from GitHub Environment secrets, transfers it over SSH,
+and verifies only the presence of the YooKassa variables in `autobot-api`.
 
-The following values are needed only for the retained manual SSH deployment fallback:
+The following GitHub Environment values are required by the SSH deployment:
 
 Environment secrets:
 
@@ -43,6 +46,8 @@ Environment secrets:
 - `AUTOBOT_DB_PASSWORD`
 - `TELEGRAM_BOT_TOKEN`
 - `BOT_SERVICE_ACTIVE_SECRET`
+- `YOOKASSA_SHOP_ID`
+- `YOOKASSA_SECRET_KEY`
 
 Environment variables:
 

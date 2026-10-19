@@ -32,6 +32,8 @@ describe('validateEnvironment', () => {
     expect(environment.PORT).toBe(3100);
     expect(environment.CORS_ALLOWED_ORIGINS).toEqual([]);
     expect(environment.IMAGE_TEMP_DIR).toBe('.tmp/images');
+    expect(environment.PREPAID_GENERATION_ENABLED).toBe(false);
+    expect(environment.YOOKASSA_SHOP_ID).toBeUndefined();
   });
 
   it('rejects wildcard credentialed CORS configuration', () => {
@@ -95,8 +97,33 @@ describe('validateEnvironment', () => {
         TELEGRAM_BOT_TOKEN: 'telegram-token',
         BOT_SERVICE_ACTIVE_KEY_ID: 'bot-v1',
         BOT_SERVICE_ACTIVE_SECRET: 'a'.repeat(32),
+        YOOKASSA_SHOP_ID: 'shop-id',
+        YOOKASSA_SECRET_KEY: 'secret-key',
       }),
     ).not.toThrow();
+  });
+
+  it('requires YooKassa credentials in production without exposing their values', () => {
+    const productionEnvironment = {
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      API_PUBLIC_URL: 'https://api.example.com',
+      TELEGRAM_BOT_TOKEN: 'telegram-token',
+      BOT_SERVICE_ACTIVE_KEY_ID: 'bot-v1',
+      BOT_SERVICE_ACTIVE_SECRET: 'a'.repeat(32),
+    };
+
+    expect(() => validateEnvironment(productionEnvironment)).toThrow('YOOKASSA_SHOP_ID');
+
+    const secret = 'yookassa-secret-value';
+    try {
+      validateEnvironment({
+        ...productionEnvironment,
+        YOOKASSA_SECRET_KEY: secret,
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain(secret);
+    }
   });
 
   it('requires secure cookies for SameSite=None', () => {

@@ -80,6 +80,7 @@ The bot repository receives the matching key ID/secret through its own secret st
 | ----------------------------- | ------------- | ------ | -------------------------------------------------------------------------- |
 | `GPTUNNEL_API_KEY`            | AI generation | yes    | GPTunnel credential; sent as the raw Authorization value                   |
 | `GPTUNNEL_USE_WALLET_BALANCE` | no            | no     | Personal-wallet billing for text; defaults to false; not sent to media API |
+| `PREPAID_GENERATION_ENABLED`  | no            | no     | Enables the prepaid write path after bot migration; defaults to false      |
 | `AI_TEXT_MODEL`               | no            | no     | Chat model ID from `/v1/models`; default `gpt-4o-mini`                     |
 | `AI_IMAGE_MODEL`              | no            | no     | IMAGE model ID from `/api/v2/media/models`; default `gpt-image`            |
 | `GPTUNNEL_IMAGE_PARAMS`       | no            | no     | JSON object of model-specific primitive parameters; default `{}`           |
@@ -87,6 +88,8 @@ The bot repository receives the matching key ID/secret through its own secret st
 | `AI_REQUEST_TIMEOUT_MS`       | no            | no     | Timeout for each provider HTTP request and image download; default 30000   |
 | `AI_IMAGE_TIMEOUT_MS`         | no            | no     | Overall image catalogue/create/poll/download deadline; default 180000      |
 | `AI_IMAGE_POLL_INTERVAL_MS`   | no            | no     | Asynchronous poll interval; default 2000                                   |
+| `YOOKASSA_SHOP_ID`            | production    | yes    | YooKassa shop identifier; retained only in the backend runtime             |
+| `YOOKASSA_SECRET_KEY`         | production    | yes    | YooKassa API key; retained only in the backend runtime                     |
 
 `OPEN_API_KEY` is retired. Configure a GPTunnel key explicitly; no credential fallback or direct
 OpenAI requests remain. Model availability and supported parameters are account-specific; verify
@@ -123,6 +126,8 @@ The PostgreSQL data directory is provided by the deployment's local persistent D
 - Active and previous bot key IDs must differ.
 - Production requires `TELEGRAM_BOT_TOKEN`; development may omit it, in which case channel
   validation returns `503 TELEGRAM_CHANNEL_VALIDATION_NOT_CONFIGURED`.
+- Production requires `YOOKASSA_SHOP_ID` and `YOOKASSA_SECRET_KEY` even before payment routes are
+  enabled; deployment checks only that both keys are present in `autobot-api`.
 - Secret values must meet minimum length/format rules.
 - A writable, non-public `IMAGE_TEMP_DIR` is required when image generation is enabled.
 - `IMAGE_TEMP_DIR` must not point to the PostgreSQL data directory, repository, or a publicly served directory.
