@@ -90,16 +90,16 @@ export class WalletService {
     });
   }
 
-  reserve(input: CreditMutation) {
-    return this.mutate(input, 'reserve');
+  reserve(input: CreditMutation, database?: Prisma.TransactionClient) {
+    return this.mutate(input, 'reserve', database);
   }
 
-  commit(input: CreditMutation) {
-    return this.mutate(input, 'commit');
+  commit(input: CreditMutation, database?: Prisma.TransactionClient) {
+    return this.mutate(input, 'commit', database);
   }
 
-  release(input: CreditMutation) {
-    return this.mutate(input, 'release');
+  release(input: CreditMutation, database?: Prisma.TransactionClient) {
+    return this.mutate(input, 'release', database);
   }
 
   async grant(input: CreditGrant): Promise<WalletBalance> {
@@ -141,9 +141,13 @@ export class WalletService {
     });
   }
 
-  private async mutate(input: CreditMutation, action: 'reserve' | 'commit' | 'release') {
+  private async mutate(
+    input: CreditMutation,
+    action: 'reserve' | 'commit' | 'release',
+    database?: Prisma.TransactionClient,
+  ) {
     this.assertInput(input);
-    return serializableTransaction(this.prisma, async (transaction) => {
+    const operation = async (transaction: Prisma.TransactionClient) => {
       const existing = await transaction.generationReservation.findUnique({
         where: { operationKey: input.operationKey },
         include: { wallet: true },
@@ -204,7 +208,8 @@ export class WalletService {
         },
       });
       return this.balance(updated);
-    });
+    };
+    return database ? operation(database) : serializableTransaction(this.prisma, operation);
   }
 
   private async settleExisting(

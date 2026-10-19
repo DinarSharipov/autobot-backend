@@ -13,7 +13,7 @@ import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { serializableTransaction } from '../common/database/serializable-transaction.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
-import { UsageService } from '../subscriptions/usage.service.js';
+import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import { nextOccurrence, parseRecurrence } from './recurrence.js';
 import type { ScheduleCreateDto, ScheduleListQuery, ScheduleUpdateDto } from './schedules.dto.js';
 import { toScheduleView, type ScheduleView } from './schedule.types.js';
@@ -23,7 +23,7 @@ export class SchedulesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly idempotency: IdempotencyService,
-    private readonly usage: UsageService,
+    private readonly funding: GenerationFundingService,
   ) {}
 
   async list(userId: string, query: ScheduleListQuery) {
@@ -229,23 +229,9 @@ export class SchedulesService {
         },
       });
       if (!skip) {
-        await this.usage.reserve({
-          userId: schedule.post.userId,
-          metric: 'TEXT_GENERATION',
-          amount: 1,
-          operationKey: `publication:${publication.id}:text-generation:reserve`,
-          metadata: { publicationId: publication.id },
-          database: transaction,
-        });
+        await this.funding.reserveText(schedule.post.userId, publication.id, transaction);
         if (schedule.post.generateImage) {
-          await this.usage.reserve({
-            userId: schedule.post.userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `publication:${publication.id}:image-generation:reserve`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
-          });
+          await this.funding.reserveImage(schedule.post.userId, publication.id, transaction);
         }
         await transaction.outboxEvent.create({
           data: {
@@ -310,23 +296,9 @@ export class SchedulesService {
       },
     });
     if (!skip) {
-      await this.usage.reserve({
-        userId: schedule.post.userId,
-        metric: 'TEXT_GENERATION',
-        amount: 1,
-        operationKey: `publication:${publication.id}:text-generation:reserve`,
-        metadata: { publicationId: publication.id },
-        database: transaction,
-      });
+      await this.funding.reserveText(schedule.post.userId, publication.id, transaction);
       if (schedule.post.generateImage) {
-        await this.usage.reserve({
-          userId: schedule.post.userId,
-          metric: 'IMAGE_GENERATION',
-          amount: 1,
-          operationKey: `publication:${publication.id}:image-generation:reserve`,
-          metadata: { publicationId: publication.id },
-          database: transaction,
-        });
+        await this.funding.reserveImage(schedule.post.userId, publication.id, transaction);
       }
       await transaction.outboxEvent.create({
         data: {

@@ -6,7 +6,7 @@ import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { EntitlementService } from '../subscriptions/entitlement.service.js';
-import { UsageService } from '../subscriptions/usage.service.js';
+import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import type {
   PostCreateDto,
   PostListQuery,
@@ -26,7 +26,7 @@ export class PostsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly entitlements: EntitlementService,
-    private readonly usage: UsageService,
+    private readonly funding: GenerationFundingService,
     private readonly idempotency: IdempotencyService,
   ) {}
 
@@ -176,23 +176,9 @@ export class PostsService {
             definition: this.publicationDefinition(post),
           },
         });
-        await this.usage.reserve({
-          userId,
-          metric: 'TEXT_GENERATION',
-          amount: 1,
-          operationKey: `publication:${publication.id}:text-generation:reserve`,
-          metadata: { publicationId: publication.id },
-          database: transaction,
-        });
+        await this.funding.reserveText(userId, publication.id, transaction);
         if (post.generateImage) {
-          await this.usage.reserve({
-            userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `publication:${publication.id}:image-generation:reserve`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
-          });
+          await this.funding.reserveImage(userId, publication.id, transaction);
         }
         await transaction.outboxEvent.create({
           data: {

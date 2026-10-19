@@ -5,7 +5,7 @@ import { serializableTransaction } from '../common/database/serializable-transac
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
-import { UsageService } from '../subscriptions/usage.service.js';
+import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import { TextGenerationAdapter, TextGenerationProviderError } from './text-generation.adapter.js';
 
 type PublicationDefinition = {
@@ -51,7 +51,7 @@ export class GenerationService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly adapter: TextGenerationAdapter,
-    private readonly usage: UsageService,
+    private readonly funding: GenerationFundingService,
   ) {}
 
   async generate(publicationId: string, retry = false): Promise<void> {
@@ -247,14 +247,12 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      await this.usage.commit({
-        userId: publication.post.userId,
-        metric: 'TEXT_GENERATION',
-        amount: 1,
-        operationKey: claim.usageCommitKey,
-        metadata: { publicationId: claim.publicationId },
-        database: transaction,
-      });
+      await this.funding.commitText(
+        publication.post.userId,
+        claim.publicationId,
+        transaction,
+        claim.usageCommitKey.slice(0, -':commit'.length),
+      );
     });
   }
 
@@ -277,23 +275,14 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      await this.usage.release({
-        userId: publication.post.userId,
-        metric: 'TEXT_GENERATION',
-        amount: 1,
-        operationKey: claim.usageReleaseKey,
-        metadata: { publicationId: claim.publicationId },
-        database: transaction,
-      });
+      await this.funding.releaseText(
+        publication.post.userId,
+        claim.publicationId,
+        transaction,
+        claim.usageReleaseKey.slice(0, -':release'.length),
+      );
       if (publication.post.generateImage) {
-        await this.usage.release({
-          userId: publication.post.userId,
-          metric: 'IMAGE_GENERATION',
-          amount: 1,
-          operationKey: `publication:${claim.publicationId}:image-generation:release`,
-          metadata: { publicationId: claim.publicationId },
-          database: transaction,
-        });
+        await this.funding.releaseImage(publication.post.userId, claim.publicationId, transaction);
       }
     });
   }

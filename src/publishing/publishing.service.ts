@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Prisma, PublicationStatus } from '../generated/prisma/client.js';
@@ -10,6 +10,7 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service.js
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { ImageTempService } from '../infrastructure/image-temp/image-temp.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
 import {
   TelegramPublicationAdapter,
@@ -73,6 +74,7 @@ export class PublishingService {
     private readonly temporaryImages: ImageTempService,
     private readonly idempotency: IdempotencyService,
     private readonly usage: UsageService,
+    @Optional() private readonly funding?: GenerationFundingService,
   ) {}
 
   async list(userId: string, query: PublicationListQuery) {
@@ -207,13 +209,22 @@ export class PublishingService {
       idempotencyKey: `publication:${publication.id}:image`,
     });
     onPath(image.filePath);
-    await this.usage.commit({
-      userId: publication.post.userId,
-      metric: 'IMAGE_GENERATION',
-      amount: 1,
-      operationKey: `${imageUsageKey}:commit`,
-      metadata: { publicationId: publication.id },
-    });
+    if (this.funding) {
+      await this.funding.commitImage(
+        publication.post.userId,
+        publication.id,
+        undefined,
+        imageUsageKey ?? undefined,
+      );
+    } else {
+      await this.usage.commit({
+        userId: publication.post.userId,
+        metric: 'IMAGE_GENERATION',
+        amount: 1,
+        operationKey: `${imageUsageKey}:commit`,
+        metadata: { publicationId: publication.id },
+      });
+    }
     onUsageCommitted();
     return this.adapter.sendPhoto(
       definition.chatId,
@@ -257,14 +268,12 @@ export class PublishingService {
           ? publication.imageUsageKey
           : `publication:${publication.id}:image-generation:retry:${randomUUID()}`;
         if (publication.post.generateImage && !imageUsageCommitted) {
-          await this.usage.reserve({
+          await this.funding!.reserveImage(
             userId,
-            metric: 'IMAGE_GENERATION',
-            amount: 1,
-            operationKey: `${retryImageUsageKey}:reserve`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
-          });
+            publication.id,
+            transaction,
+            retryImageUsageKey ?? undefined,
+          );
         }
         const updated = await transaction.publication.update({
           where: { id: publication.id },
@@ -312,14 +321,7 @@ export class PublishingService {
           );
         }
         if (publication.status === PublicationStatus.PENDING) {
-          await this.usage.release({
-            userId: publication.post.userId,
-            metric: 'TEXT_GENERATION',
-            amount: 1,
-            operationKey: `publication:${publication.id}:text-generation:release`,
-            metadata: { publicationId: publication.id },
-            database: transaction,
-          });
+          await this.funding!.releaseText(publication.post.userId, publication.id, transaction);
         }
         if (publication.post.generateImage) {
           const imageUsageCommitted = await transaction.usageLedgerEntry.findFirst({
@@ -329,14 +331,12 @@ export class PublishingService {
             },
           });
           if (!imageUsageCommitted) {
-            await this.usage.release({
-              userId: publication.post.userId,
-              metric: 'IMAGE_GENERATION',
-              amount: 1,
-              operationKey: `${this.imageUsageKey(publication)}:release`,
-              metadata: { publicationId: publication.id },
-              database: transaction,
-            });
+            await this.funding!.releaseImage(
+              publication.post.userId,
+              publication.id,
+              transaction,
+              this.imageUsageKey(publication),
+            );
           }
         }
         return toPublicationView(
@@ -425,14 +425,12 @@ export class PublishingService {
             },
           });
           if (!imageUsageCommitted) {
-            await this.usage.release({
-              userId: publication.post.userId,
-              metric: 'IMAGE_GENERATION',
-              amount: 1,
-              operationKey: `${this.imageUsageKey(publication)}:release`,
-              metadata: { publicationId: publication.id },
-              database: transaction,
-            });
+            await this.funding!.releaseImage(
+              publication.post.userId,
+              publication.id,
+              transaction,
+              this.imageUsageKey(publication),
+            );
           }
         }
       }
