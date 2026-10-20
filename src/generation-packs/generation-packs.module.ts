@@ -1,3 +1,5 @@
+import { PrepaidTextService } from './prepaid-text.service.js';
+import { PrepaidTextController } from './prepaid-text.controller.js';
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module.js';
@@ -18,12 +20,14 @@ import { YooKassaAdapter } from './yookassa.adapter.js';
   imports: [AuthModule, IdempotencyModule, SubscriptionsModule],
   controllers: [
     GenerationPacksController,
+    PrepaidTextController,
     PaymentsController,
     YooKassaWebhookController,
     RefundsController,
   ],
   providers: [
     PurchaseService,
+    PrepaidTextService,
     WalletService,
     RevisionAllowanceService,
     GenerationFundingService,
@@ -31,6 +35,12 @@ import { YooKassaAdapter } from './yookassa.adapter.js';
     PaymentsService,
     RefundsService,
   ],
-  exports: [PurchaseService, WalletService, RevisionAllowanceService, GenerationFundingService],
+  exports: [
+    PrepaidTextService,
+    PurchaseService,
+    WalletService,
+    RevisionAllowanceService,
+    GenerationFundingService,
+  ],
 })
 export class GenerationPacksModule {}

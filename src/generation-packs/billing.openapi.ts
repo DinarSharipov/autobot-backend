@@ -154,3 +154,51 @@ export const refundSchema: SchemaObject = {
     createdAt: { type: 'string', format: 'date-time' },
   },
 };
+
+export const textCostSchema: SchemaObject = {
+  type: 'object',
+  required: [
+    'publicationId',
+    'moderationRequestId',
+    'moderationVersion',
+    'action',
+    'creditType',
+    'units',
+    'includedRemaining',
+    'available',
+    'debt',
+    'costConfirmationId',
+    'expiresAt',
+  ],
+  properties: {
+    publicationId: { type: 'string', format: 'uuid' },
+    moderationRequestId: { type: 'string', format: 'uuid' },
+    moderationVersion: { type: 'integer', example: 1 },
+    action: { type: 'string', enum: ['INCLUDED_REVISION', 'PAID_REVISION'] },
+    creditType: { type: 'string', enum: ['TEXT'] },
+    units: { type: 'integer', enum: [0, 1], example: 1 },
+    includedRemaining: { type: 'integer', minimum: 0, example: 0 },
+    available: { type: 'integer', minimum: 0, example: 5 },
+    debt: { type: 'integer', minimum: 0, example: 0 },
+    costConfirmationId: {
+      type: 'string',
+      format: 'uuid',
+      description:
+        'Single-use confirmation valid for ten minutes; bound to owner, publication, moderation version and allowance version.',
+    },
+    expiresAt: { type: 'string', format: 'date-time' },
+  },
+};
+export const textPublicationSchema: SchemaObject = {
+  type: 'object',
+  required: ['id', 'status', 'fundingMode', 'fundingStatus', 'version', 'errorCode'],
+  additionalProperties: true,
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    status: { type: 'string', example: 'PENDING' },
+    fundingMode: { type: 'string', enum: ['LEGACY', 'PREPAID'] },
+    fundingStatus: { type: 'string', enum: ['READY', 'BLOCKED_FUNDS'] },
+    version: { type: 'integer', minimum: 1 },
+    errorCode: { type: 'string', nullable: true, example: 'INSUFFICIENT_TEXT_CREDITS' },
+  },
+};

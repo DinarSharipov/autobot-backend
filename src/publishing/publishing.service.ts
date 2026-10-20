@@ -10,6 +10,7 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service.js
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { ImageTempService } from '../infrastructure/image-temp/image-temp.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
 import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
 import {
@@ -75,6 +76,7 @@ export class PublishingService {
     private readonly idempotency: IdempotencyService,
     private readonly usage: UsageService,
     @Optional() private readonly funding?: GenerationFundingService,
+    @Optional() private readonly prepaidText?: PrepaidTextService,
   ) {}
 
   async list(userId: string, query: PublicationListQuery) {
@@ -136,6 +138,15 @@ export class PublishingService {
     if (!publication) return;
     const definition = definitionOf(publication.definition);
     const generateImage = definition?.generateImage ?? publication.post.generateImage;
+    // Media preview/selection is a separate rollout. Never generate an unapproved prepaid image here.
+    if (publication.fundingMode === 'PREPAID' && generateImage) {
+      await this.fail(
+        publicationId,
+        'MEDIA_UNAVAILABLE',
+        'Prepaid media selection is not available.',
+      );
+      return;
+    }
     const chatId = definition
       ? BigInt(definition.telegramChatId)
       : publication.post.channel.telegramChatId;
@@ -215,6 +226,7 @@ export class PublishingService {
         publication.id,
         undefined,
         imageUsageKey ?? undefined,
+        false,
       );
     } else {
       await this.usage.commit({
@@ -273,6 +285,7 @@ export class PublishingService {
             publication.id,
             transaction,
             retryImageUsageKey ?? undefined,
+            false,
           );
         }
         const updated = await transaction.publication.update({
@@ -321,9 +334,18 @@ export class PublishingService {
           );
         }
         if (publication.status === PublicationStatus.PENDING) {
-          await this.funding!.releaseText(publication.post.userId, publication.id, transaction);
+          if (publication.fundingMode === 'PREPAID')
+            await this.prepaidText!.cancelPending(transaction, publication);
+          else
+            await this.funding!.releaseText(
+              publication.post.userId,
+              publication.id,
+              transaction,
+              undefined,
+              false,
+            );
         }
-        if (publication.post.generateImage) {
+        if (publication.fundingMode !== 'PREPAID' && publication.post.generateImage) {
           const imageUsageCommitted = await transaction.usageLedgerEntry.findFirst({
             where: {
               operationKey: `${this.imageUsageKey(publication)}:commit`,
@@ -336,6 +358,7 @@ export class PublishingService {
               publication.id,
               transaction,
               this.imageUsageKey(publication),
+              false,
             );
           }
         }
@@ -417,7 +440,7 @@ export class PublishingService {
           where: { id: publicationId },
           include: { post: true },
         });
-        if (publication?.post.generateImage) {
+        if (publication?.fundingMode !== 'PREPAID' && publication?.post.generateImage) {
           const imageUsageCommitted = await transaction.usageLedgerEntry.findFirst({
             where: {
               operationKey: `${this.imageUsageKey(publication)}:commit`,
@@ -430,6 +453,7 @@ export class PublishingService {
               publication.id,
               transaction,
               this.imageUsageKey(publication),
+              false,
             );
           }
         }

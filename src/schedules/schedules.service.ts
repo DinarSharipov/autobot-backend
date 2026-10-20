@@ -221,6 +221,7 @@ export class SchedulesService {
       const publication = await transaction.publication.create({
         data: {
           postId: schedule.postId,
+          fundingMode: this.funding.isPrepaid ? 'PREPAID' : 'LEGACY',
           scheduleId: schedule.id,
           scheduledFor,
           definition: this.publicationDefinition(schedule.post),
@@ -229,9 +230,22 @@ export class SchedulesService {
         },
       });
       if (!skip) {
-        await this.funding.reserveText(schedule.post.userId, publication.id, transaction);
-        if (schedule.post.generateImage) {
-          await this.funding.reserveImage(schedule.post.userId, publication.id, transaction);
+        if (publication.fundingMode === 'LEGACY') {
+          await this.funding.reserveText(
+            schedule.post.userId,
+            publication.id,
+            transaction,
+            undefined,
+            false,
+          );
+          if (schedule.post.generateImage)
+            await this.funding.reserveImage(
+              schedule.post.userId,
+              publication.id,
+              transaction,
+              undefined,
+              false,
+            );
         }
         await transaction.outboxEvent.create({
           data: {
@@ -288,6 +302,7 @@ export class SchedulesService {
     const publication = await transaction.publication.create({
       data: {
         postId: schedule.postId,
+        fundingMode: this.funding.isPrepaid ? 'PREPAID' : 'LEGACY',
         scheduleId: schedule.id,
         scheduledFor,
         definition: this.publicationDefinition(schedule.post),
@@ -296,9 +311,22 @@ export class SchedulesService {
       },
     });
     if (!skip) {
-      await this.funding.reserveText(schedule.post.userId, publication.id, transaction);
-      if (schedule.post.generateImage) {
-        await this.funding.reserveImage(schedule.post.userId, publication.id, transaction);
+      if (publication.fundingMode === 'LEGACY') {
+        await this.funding.reserveText(
+          schedule.post.userId,
+          publication.id,
+          transaction,
+          undefined,
+          false,
+        );
+        if (schedule.post.generateImage)
+          await this.funding.reserveImage(
+            schedule.post.userId,
+            publication.id,
+            transaction,
+            undefined,
+            false,
+          );
       }
       await transaction.outboxEvent.create({
         data: {

@@ -131,9 +131,13 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     if (payload.schemaVersion !== 1 || typeof payload.publicationId !== 'string') return;
     const publication = await this.prisma.publication.findUnique({
       where: { id: payload.publicationId },
-      select: { status: true },
+      select: { status: true, fundingStatus: true },
     });
-    if (!publication || (publication.status !== 'PENDING' && publication.status !== 'GENERATING'))
+    if (
+      !publication ||
+      publication.fundingStatus === 'BLOCKED_FUNDS' ||
+      (publication.status !== 'PENDING' && publication.status !== 'GENERATING')
+    )
       return;
     const jobId = `generation-${event.id}`;
     if (await this.generationQueue.getJob(jobId)) return;

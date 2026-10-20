@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 
-import { PublicationMode } from '../generated/prisma/client.js';
+import { ApiHttpException } from '../common/http/api-http.exception.js';
+import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
+import { PublicationMode, type TextFundingKind } from '../generated/prisma/client.js';
 import { serializableTransaction } from '../common/database/serializable-transaction.js';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
@@ -35,6 +37,10 @@ function definitionOf(value: unknown): PublicationDefinition | null {
 }
 
 type Claim = {
+  prepaid: boolean;
+  fundingKind: TextFundingKind;
+  fundingKey: string;
+  sourceRequestId: string | null;
   publicationId: string;
   aiRequestId: string;
   versionId: string;
@@ -57,6 +63,7 @@ export class GenerationService {
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly adapter: TextGenerationAdapter,
     private readonly funding: GenerationFundingService,
+    private readonly prepaidText: PrepaidTextService,
   ) {}
 
   async generate(publicationId: string, retry = false): Promise<void> {
@@ -72,6 +79,8 @@ export class GenerationService {
         maxCharacters: claim.maxCharacters,
         idempotencyKey: `publication:${claim.publicationId}:text:v${claim.generationSequence}`,
       });
+      if (!result.text.trim() || result.text.length > claim.maxCharacters)
+        throw new TextGenerationProviderError('AI_TEXT_INVALID', false);
     } catch (error) {
       if (error instanceof TextGenerationProviderError && error.retryable) throw error;
       await this.fail(
@@ -98,9 +107,16 @@ export class GenerationService {
       where: { publicationId, status: 'REVISION_REQUESTED' },
       orderBy: { createdAt: 'desc' },
     });
+    const publication = await this.prisma.publication.findUniqueOrThrow({
+      where: { id: publicationId },
+    });
     const revisionUsageSuffix = revision ? `:revision:${revision.versionId}` : '';
     await this.fail(
       {
+        prepaid: publication.fundingMode === 'PREPAID',
+        fundingKind: publication.textFundingKind,
+        fundingKey: publication.textFundingKey ?? `publication:${publicationId}:text-generation`,
+        sourceRequestId: publication.textRevisionRequestId,
         publicationId,
         aiRequestId: running.id,
         versionId: version.id,
@@ -129,12 +145,55 @@ export class GenerationService {
       });
       if (
         !publication ||
+        publication.fundingStatus === 'BLOCKED_FUNDS' ||
         (publication.status !== 'PENDING' && !(retry && publication.status === 'GENERATING'))
       )
         return null;
+      const prepaid = publication.fundingMode === 'PREPAID';
+      const fundingKey =
+        publication.textFundingKey ?? `publication:${publicationId}:text-generation`;
+      if (prepaid) {
+        try {
+          await this.prepaidText.reserve(
+            transaction,
+            publication.post.userId,
+            publicationId,
+            publication.textFundingKind,
+            fundingKey,
+          );
+        } catch (error) {
+          if (
+            !(error instanceof ApiHttpException) ||
+            !['INSUFFICIENT_TEXT_CREDITS'].includes(
+              String((error.getResponse() as { code?: string }).code),
+            )
+          )
+            throw error;
+          await transaction.publication.update({
+            where: { id: publicationId },
+            data: {
+              status: 'PENDING',
+              fundingStatus: 'BLOCKED_FUNDS',
+              errorCode: 'INSUFFICIENT_TEXT_CREDITS',
+              version: { increment: 1 },
+            },
+          });
+          await transaction.auditEvent.create({
+            data: {
+              actorType: 'SYSTEM',
+              actorId: 'generation-worker',
+              action: 'generation.blocked_funds',
+              entityType: 'Publication',
+              entityId: publicationId,
+              metadata: { creditType: 'TEXT', units: 1 },
+            },
+          });
+          return null;
+        }
+      }
       const updated = await transaction.publication.updateMany({
         where: { id: publication.id, status: publication.status },
-        data: { status: 'GENERATING' },
+        data: { status: 'GENERATING', ...(prepaid ? { textFundingKey: fundingKey } : {}) },
       });
       if (!updated.count) return null;
       const existing = retry
@@ -163,7 +222,9 @@ export class GenerationService {
         _max: { sequence: true },
       });
       const revision = await transaction.moderationRequest.findFirst({
-        where: { publicationId, status: 'REVISION_REQUESTED' },
+        where: prepaid
+          ? { id: publication.textRevisionRequestId ?? '00000000-0000-0000-0000-000000000000' }
+          : { publicationId, status: 'REVISION_REQUESTED' },
         orderBy: { createdAt: 'desc' },
         include: { postVersion: true },
       });
@@ -179,10 +240,15 @@ export class GenerationService {
             aiRequestId: aiRequest.id,
             sequence: generationSequence,
             status: 'GENERATING',
+            ...(revision ? { sourceVersionId: revision.versionId } : {}),
           },
         }));
       const definition = definitionOf(publication.definition);
       return {
+        prepaid,
+        fundingKind: publication.textFundingKind,
+        fundingKey,
+        sourceRequestId: publication.textRevisionRequestId,
         publicationId,
         aiRequestId: aiRequest.id,
         versionId: version.id,
@@ -261,13 +327,14 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      if (claim.revisionAllowanceKey) {
-        await this.funding.commitRevisionText(
+      if (claim.prepaid) {
+        await this.prepaidText.settle(
+          transaction,
           publication.post.userId,
           claim.publicationId,
-          transaction,
-          claim.usageCommitKey.slice(0, -':commit'.length),
-          claim.revisionAllowanceKey,
+          claim.fundingKind,
+          claim.fundingKey,
+          'commit',
         );
       } else {
         await this.funding.commitText(
@@ -275,12 +342,14 @@ export class GenerationService {
           claim.publicationId,
           transaction,
           claim.usageCommitKey.slice(0, -':commit'.length),
+          false,
         );
-        await this.funding.ensureRevisionAllowance(
-          publication.post.userId,
-          claim.publicationId,
-          transaction,
-        );
+        if (!claim.revisionAllowanceKey)
+          await this.funding.ensureRevisionAllowance(
+            publication.post.userId,
+            claim.publicationId,
+            transaction,
+          );
       }
     });
   }
@@ -304,24 +373,55 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
-      if (claim.revisionAllowanceKey) {
-        await this.funding.releaseRevisionText(
+      if (claim.prepaid) {
+        await this.prepaidText.settle(
+          transaction,
           publication.post.userId,
           claim.publicationId,
-          transaction,
-          claim.usageReleaseKey.slice(0, -':release'.length),
-          claim.revisionAllowanceKey,
+          claim.fundingKind,
+          claim.fundingKey,
+          'release',
         );
+        if (claim.sourceRequestId) {
+          const source = await transaction.moderationRequest.update({
+            where: { id: claim.sourceRequestId },
+            data: {
+              status: 'PENDING',
+              version: { increment: 1 },
+              feedback: null,
+              decidedAt: null,
+              decidedByUserId: null,
+            },
+          });
+          await transaction.postVersion.update({
+            where: { id: source.versionId },
+            data: { status: 'GENERATED' },
+          });
+          await transaction.publication.update({
+            where: { id: claim.publicationId },
+            data: {
+              status: 'AWAITING_MODERATION',
+              version: { increment: 1 },
+              textRevisionRequestId: null,
+            },
+          });
+        }
       } else {
         await this.funding.releaseText(
           publication.post.userId,
           claim.publicationId,
           transaction,
           claim.usageReleaseKey.slice(0, -':release'.length),
+          false,
         );
-      }
-      if (publication.post.generateImage) {
-        await this.funding.releaseImage(publication.post.userId, claim.publicationId, transaction);
+        if (publication.post.generateImage)
+          await this.funding.releaseImage(
+            publication.post.userId,
+            claim.publicationId,
+            transaction,
+            undefined,
+            false,
+          );
       }
     });
   }

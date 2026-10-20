@@ -215,17 +215,18 @@ For the refund policy, debt fields and new refund endpoints see [BILLING_REFUNDS
 
 ## Request status after this slice
 
-| Original item                                                                           | Status                                                   |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Catalogue, balances, ledger, orders, payment create/check contract                      | done for test checkout                                   |
-| Server catalogue/snapshots and gift                                                     | implemented; provisioning/concurrent gift covered        |
-| YooKassa capture/redirect/durable idempotency                                           | done for test checkout                                   |
-| Verified webhook, duplicate/out-of-order handling, atomic fulfillment                   | done for test checkout                                   |
-| Pending/paid-but-unfulfilled reconciliation                                             | done as explicit bounded CLI; scheduling pending rollout |
-| Compensating refunds                                                                    | done for verified test refunds; see BILLING_REFUNDS.md   |
-| Full prepaid revision/image/resume flow and acceptance matrix                           | pending separate slice                                   |
-| Controlled real provider test, production secret presence verification for this release | pending deployment                                       |
-| Production channel/Stars implementation and global prepaid activation                   | pending decision/implementation; disabled                |
+| Original item                                                                           | Status                                                           |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Catalogue, balances, ledger, orders, payment create/check contract                      | done for test checkout                                           |
+| Server catalogue/snapshots and gift                                                     | implemented; provisioning/concurrent gift covered                |
+| YooKassa capture/redirect/durable idempotency                                           | done for test checkout                                           |
+| Verified webhook, duplicate/out-of-order handling, atomic fulfillment                   | done for test checkout                                           |
+| Pending/paid-but-unfulfilled reconciliation                                             | done as explicit bounded CLI; scheduling pending rollout         |
+| Compensating refunds                                                                    | done for verified test refunds; see BILLING_REFUNDS.md           |
+| Prepaid text revision confirmation and BLOCKED_FUNDS/resume                             | implemented behind disabled rollout; see PREPAID_TEXT_FUNDING.md |
+| Image preview/replacement/select and media reuse                                        | pending separate slice                                           |
+| Controlled real provider test, production secret presence verification for this release | pending deployment                                               |
+| Production channel/Stars implementation and global prepaid activation                   | pending decision/implementation; disabled                        |
 
 ## Changed files in this slice
 

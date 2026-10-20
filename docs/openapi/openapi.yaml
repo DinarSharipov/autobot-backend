@@ -544,6 +544,10 @@ paths:
           $ref: "#/components/responses/PublicationResponse"
         "409":
           $ref: "#/components/responses/Conflict"
+  /publications/{publicationId}/generation-cost-preview:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1generation-cost-preview'
+  /publications/{publicationId}/generation/resume:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1generation~1resume'
   /moderation/{moderationRequestId}/revision:
     post:
       tags: [Moderation]
@@ -567,6 +571,10 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 4000
+                costConfirmationId:
+                  type: string
+                  format: uuid
+                  description: Required for a paid prepaid revision. Obtain from generation-cost-preview; expired or stale confirmations return STALE_COST_CONFIRMATION. Missing paid approval returns COST_CONFIRMATION_REQUIRED.
       responses:
         "202":
           $ref: "#/components/responses/PublicationResponse"
@@ -1327,7 +1335,7 @@ components:
     Publication:
       type: object
       additionalProperties: false
-      required: [id, postId, scheduledFor, status, attemptCount, publishedWithImage, createdAt, updatedAt]
+      required: [id, postId, scheduledFor, status, fundingMode, fundingStatus, version, attemptCount, publishedWithImage, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         postId: { type: string, format: uuid }
@@ -1335,6 +1343,9 @@ components:
         selectedVersionId: { type: [string, "null"], format: uuid }
         scheduledFor: { type: string, format: date-time }
         status: { $ref: "#/components/schemas/PublicationStatus" }
+        fundingMode: { type: string, enum: [LEGACY, PREPAID] }
+        fundingStatus: { type: string, enum: [READY, BLOCKED_FUNDS] }
+        version: { type: integer, minimum: 1 }
         attemptCount: { type: integer, minimum: 0 }
         nextAttemptAt: { type: [string, "null"], format: date-time }
         telegramChatId: { type: [string, "null"] }

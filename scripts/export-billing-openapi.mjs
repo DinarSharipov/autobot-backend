@@ -7,6 +7,8 @@ import {
   ledgerSchema,
   purchaseOrderSchema,
   refundSchema,
+  textCostSchema,
+  textPublicationSchema,
 } from '../src/generation-packs/billing.openapi.js';
 
 const response = (schema) => ({
@@ -61,7 +63,38 @@ function operation(operationId, summary, schema, parameters = [], status = '200'
     responses: { [status]: response(schema), ...errors },
   };
 }
+const publicationId = {
+  name: 'publicationId',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+};
 const paths = {
+  '/publications/{publicationId}/generation-cost-preview': {
+    post: operation(
+      'previewTextRevisionCost',
+      'Issue an owned text revision cost confirmation (ten minutes)',
+      billingResponse(textCostSchema),
+      [publicationId],
+    ),
+  },
+  '/publications/{publicationId}/generation/resume': {
+    post: operation(
+      'resumeTextGeneration',
+      'Explicitly resume blocked text generation or failed initial generation',
+      billingResponse(textPublicationSchema),
+      [
+        publicationId,
+        {
+          name: 'Idempotency-Key',
+          in: 'header',
+          required: true,
+          schema: { type: 'string', minLength: 16, maxLength: 128 },
+        },
+      ],
+      '202',
+    ),
+  },
   '/generation-packs': {
     get: operation(
       'listGenerationPacks',
@@ -214,7 +247,7 @@ const document = {
   openapi: '3.1.0',
   info: {
     title: 'Autobot billing contract',
-    version: '1.1.0',
+    version: '1.2.0',
     description:
       'Additive v1 bot contract. Test-only checkout is disabled by default. Browser mutations require CSRF; bot requests require HMAC companion headers from ADR 0003.',
   },

@@ -77,6 +77,7 @@ export class ModerationController {
         parseIfMatch(ifMatch),
         dto.feedback,
         requireIdempotencyKey(key),
+        dto.costConfirmationId,
       ),
     };
   }

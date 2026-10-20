@@ -32,6 +32,9 @@ export type PublicationView = {
   selectedVersionId: string | null;
   scheduledFor: string;
   status: Publication['status'];
+  fundingMode: Publication['fundingMode'];
+  fundingStatus: Publication['fundingStatus'];
+  version: number;
   attemptCount: number;
   nextAttemptAt: string | null;
   telegramChatId: string | null;
@@ -80,6 +83,9 @@ export function toPublicationView(publication: Publication): PublicationView {
     selectedVersionId: publication.selectedVersionId,
     scheduledFor: publication.scheduledFor.toISOString(),
     status: publication.status,
+    fundingMode: publication.fundingMode,
+    fundingStatus: publication.fundingStatus,
+    version: publication.version,
     attemptCount: publication.attemptCount,
     nextAttemptAt: publication.nextAttemptAt?.toISOString() ?? null,
     telegramChatId: publication.telegramChatId?.toString() ?? null,

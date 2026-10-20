@@ -171,14 +171,16 @@ export class PostsService {
         const publication = await transaction.publication.create({
           data: {
             postId,
+            fundingMode: this.funding.isPrepaid ? 'PREPAID' : 'LEGACY',
             idempotencyKey: `${userId}:${key}`,
             scheduledFor: new Date(),
             definition: this.publicationDefinition(post),
           },
         });
-        await this.funding.reserveText(userId, publication.id, transaction);
-        if (post.generateImage) {
-          await this.funding.reserveImage(userId, publication.id, transaction);
+        if (publication.fundingMode === 'LEGACY') {
+          await this.funding.reserveText(userId, publication.id, transaction, undefined, false);
+          if (post.generateImage)
+            await this.funding.reserveImage(userId, publication.id, transaction, undefined, false);
         }
         await transaction.outboxEvent.create({
           data: {

@@ -1,9 +1,11 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -31,6 +33,15 @@ export class ModerationListQuery {
 }
 
 export class ModerationRevisionDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description:
+      'Single-use generation-cost-preview confirmation, required for paid prepaid text revisions.',
+  })
+  @IsOptional()
+  @IsUUID()
+  costConfirmationId?: string;
+
   @IsString()
   @MinLength(1)
   @MaxLength(4000)

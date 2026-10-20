@@ -6,6 +6,7 @@ import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
 import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import type { ModerationListQuery } from './moderation.dto.js';
 import { toModerationRequestView } from './moderation.types.js';
@@ -20,6 +21,7 @@ export class ModerationService {
     private readonly idempotency: IdempotencyService,
     private readonly usage: UsageService,
     private readonly funding: GenerationFundingService,
+    private readonly prepaid: PrepaidTextService,
   ) {}
 
   async list(userId: string, query: ModerationListQuery) {
@@ -123,8 +125,17 @@ export class ModerationService {
           where: { id: request.publicationId },
           data: { status: 'CANCELLED' },
         });
-        if (request.publication.post.generateImage) {
-          await this.funding.releaseImage(userId, request.publicationId, transaction);
+        if (
+          request.publication.fundingMode === 'LEGACY' &&
+          request.publication.post.generateImage
+        ) {
+          await this.funding.releaseImage(
+            userId,
+            request.publicationId,
+            transaction,
+            undefined,
+            false,
+          );
         }
         await this.audit(transaction, userId, request.id, 'moderation.rejected', {
           publicationId: request.publicationId,
@@ -141,6 +152,7 @@ export class ModerationService {
     version: number,
     feedback: string,
     key: string,
+    confirmationId?: string,
   ): Promise<PublicationView> {
     const normalizedFeedback = feedback.trim();
     if (!normalizedFeedback) {
@@ -154,7 +166,12 @@ export class ModerationService {
       userId,
       operation: `moderation.revision:${requestId}`,
       key,
-      requestHash: this.idempotency.digest({ requestId, version, feedback: normalizedFeedback }),
+      requestHash: this.idempotency.digest({
+        requestId,
+        version,
+        feedback: normalizedFeedback,
+        ...(confirmationId ? { confirmationId } : {}),
+      }),
       handler: async (transaction) => {
         const request = await this.pendingRequest(transaction, userId, requestId, version);
         const now = new Date();
@@ -165,13 +182,25 @@ export class ModerationService {
         const revisionKey = `revision:${request.versionId}`;
         const textReserveKey = `publication:${request.publicationId}:${revisionKey}:text-generation:reserve`;
         const allowanceKey = `publication:${request.publicationId}:${revisionKey}:included-revision`;
-        await this.funding.reserveRevision(
-          userId,
-          request.publicationId,
-          allowanceKey,
-          transaction,
-        );
-        if (!this.funding.isPrepaid) {
+        const prepaidIntent =
+          request.publication.fundingMode === 'PREPAID'
+            ? await this.prepaid.authorizeRevision(transaction, {
+                userId,
+                publicationId: request.publicationId,
+                requestId,
+                version,
+                ...(confirmationId ? { confirmationId } : {}),
+              })
+            : null;
+        if (!prepaidIntent) {
+          await this.usage.reserve({
+            userId,
+            metric: 'MODERATION_REVISION',
+            amount: 1,
+            operationKey: allowanceKey,
+            metadata: { publicationId: request.publicationId },
+            database: transaction,
+          });
           await this.usage.commit({
             userId,
             metric: 'MODERATION_REVISION',
@@ -205,7 +234,20 @@ export class ModerationService {
         });
         await transaction.publication.update({
           where: { id: request.publicationId },
-          data: { status: 'PENDING', selectedVersionId: null },
+          data: {
+            status: 'PENDING',
+            selectedVersionId: null,
+            fundingStatus: 'READY',
+            errorCode: null,
+            version: { increment: 1 },
+            ...(prepaidIntent
+              ? {
+                  textFundingKind: prepaidIntent.kind,
+                  textFundingKey: prepaidIntent.key,
+                  textRevisionRequestId: requestId,
+                }
+              : {}),
+          },
         });
         await transaction.outboxEvent.create({
           data: {
@@ -216,6 +258,12 @@ export class ModerationService {
           },
         });
         await this.audit(transaction, userId, request.id, 'moderation.revision_requested', {
+          ...(prepaidIntent
+            ? {
+                fundingKind: prepaidIntent.kind,
+                units: prepaidIntent.kind === 'PAID_REVISION' ? 1 : 0,
+              }
+            : {}),
           publicationId: request.publicationId,
           versionId: request.versionId,
         });

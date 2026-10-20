@@ -25,8 +25,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('reserve', userId, CreditType.TEXT, publicationId, database, operationBase);
+    return this.mutate(
+      'reserve',
+      userId,
+      CreditType.TEXT,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   reserveImage(
@@ -34,8 +43,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('reserve', userId, CreditType.IMAGE, publicationId, database, operationBase);
+    return this.mutate(
+      'reserve',
+      userId,
+      CreditType.IMAGE,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   commitText(
@@ -43,8 +61,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('commit', userId, CreditType.TEXT, publicationId, database, operationBase);
+    return this.mutate(
+      'commit',
+      userId,
+      CreditType.TEXT,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   commitImage(
@@ -52,8 +79,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('commit', userId, CreditType.IMAGE, publicationId, database, operationBase);
+    return this.mutate(
+      'commit',
+      userId,
+      CreditType.IMAGE,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   releaseText(
@@ -61,8 +97,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('release', userId, CreditType.TEXT, publicationId, database, operationBase);
+    return this.mutate(
+      'release',
+      userId,
+      CreditType.TEXT,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   releaseImage(
@@ -70,8 +115,17 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
-    return this.mutate('release', userId, CreditType.IMAGE, publicationId, database, operationBase);
+    return this.mutate(
+      'release',
+      userId,
+      CreditType.IMAGE,
+      publicationId,
+      database,
+      operationBase,
+      prepaidOverride,
+    );
   }
 
   ensureRevisionAllowance(
@@ -129,10 +183,11 @@ export class GenerationFundingService {
     publicationId: string,
     database?: Prisma.TransactionClient,
     operationBase?: string,
+    prepaidOverride?: boolean,
   ) {
     const reservationKey =
       operationBase ?? `publication:${publicationId}:${creditType.toLowerCase()}-generation`;
-    if (this.isPrepaid) {
+    if (prepaidOverride ?? this.isPrepaid) {
       return this.wallet[action](
         {
           userId,

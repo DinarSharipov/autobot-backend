@@ -176,6 +176,17 @@ enum MediaStatus {
   UNAVAILABLE
 }
 
+enum PublicationFundingMode {
+  LEGACY
+  PREPAID
+}
+
+enum TextFundingKind {
+  INITIAL_TEXT
+  INCLUDED_REVISION
+  PAID_REVISION
+}
+
 enum GenerationFundingStatus {
   READY
   BLOCKED_FUNDS
@@ -208,12 +219,12 @@ enum AuditActorType {
 }
 
 model User {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  status                 UserStatus              @default(ACTIVE)
-  locale                 String                  @default("ru")
-  timezone               String                  @default("UTC")
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  id                     String                       @id @default(uuid()) @db.Uuid
+  status                 UserStatus                   @default(ACTIVE)
+  locale                 String                       @default("ru")
+  timezone               String                       @default("UTC")
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
   deletedAt              DateTime?
   telegramAccount        TelegramAccount?
   authIdentities         AuthIdentity[]
@@ -224,7 +235,7 @@ model User {
   subscriptions          Subscription[]
   usageCounters          UsageCounter[]
   aiRequests             AIRequest[]
-  moderationDecisions    ModerationRequest[]     @relation("ModerationDecisionActor")
+  moderationDecisions    ModerationRequest[]          @relation("ModerationDecisionActor")
   auditEvents            AuditEvent[]
   idempotencyRecords     IdempotencyRecord[]
   generationWallets      GenerationWallet[]
@@ -232,6 +243,7 @@ model User {
   textRevisionAllowances TextRevisionAllowance[]
   purchaseOrders         PurchaseOrder[]
   paymentEvents          PaymentEvent[]
+  costConfirmations      GenerationCostConfirmation[]
 
   @@index([status])
 }
@@ -398,39 +410,45 @@ model PostSchedule {
 }
 
 model Publication {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  postId                 String                  @db.Uuid
-  scheduleId             String?                 @db.Uuid
-  selectedVersionId      String?                 @unique @db.Uuid
-  idempotencyKey         String?                 @unique
+  id                     String                       @id @default(uuid()) @db.Uuid
+  postId                 String                       @db.Uuid
+  scheduleId             String?                      @db.Uuid
+  selectedVersionId      String?                      @unique @db.Uuid
+  idempotencyKey         String?                      @unique
   scheduledFor           DateTime
   definition             Json?
+  fundingMode            PublicationFundingMode       @default(LEGACY)
+  textFundingKind        TextFundingKind              @default(INITIAL_TEXT)
+  textFundingKey         String?
+  textRevisionRequestId  String?                      @db.Uuid
+  textRevisionRequest    ModerationRequest?           @relation("CurrentRevisionFunding", fields: [textRevisionRequestId], references: [id], onDelete: Restrict)
+  costConfirmations      GenerationCostConfirmation[]
   imageUsageKey          String?
-  fundingStatus          GenerationFundingStatus @default(READY)
-  selectedMediaId        String?                 @unique @db.Uuid
-  version                Int                     @default(1)
-  status                 PublicationStatus       @default(PENDING)
-  attemptCount           Int                     @default(0)
+  fundingStatus          GenerationFundingStatus      @default(READY)
+  selectedMediaId        String?                      @unique @db.Uuid
+  version                Int                          @default(1)
+  status                 PublicationStatus            @default(PENDING)
+  attemptCount           Int                          @default(0)
   nextAttemptAt          DateTime?
   telegramChatId         BigInt?
   telegramMessageId      BigInt?
-  publishedWithImage     Boolean                 @default(false)
+  publishedWithImage     Boolean                      @default(false)
   errorCode              String?
   errorDetails           Json?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
   publishedAt            DateTime?
-  post                   Post                    @relation(fields: [postId], references: [id], onDelete: Restrict)
-  schedule               PostSchedule?           @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
-  versions               PostVersion[]           @relation("PublicationVersions")
-  selectedVersion        PostVersion?            @relation("SelectedPublicationVersion", fields: [selectedVersionId], references: [id], onDelete: Restrict)
+  post                   Post                         @relation(fields: [postId], references: [id], onDelete: Restrict)
+  schedule               PostSchedule?                @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  versions               PostVersion[]                @relation("PublicationVersions")
+  selectedVersion        PostVersion?                 @relation("SelectedPublicationVersion", fields: [selectedVersionId], references: [id], onDelete: Restrict)
   moderationRequests     ModerationRequest[]
   aiRequests             AIRequest[]
   generationReservations GenerationReservation[]
   textRevisionAllowance  TextRevisionAllowance?
   creditLedgerEntries    CreditLedgerEntry[]
-  media                  PublicationMedia[]      @relation("PublicationMediaVersions")
-  selectedMedia          PublicationMedia?       @relation("SelectedPublicationMedia", fields: [selectedMediaId], references: [id], onDelete: Restrict)
+  media                  PublicationMedia[]           @relation("PublicationMediaVersions")
+  selectedMedia          PublicationMedia?            @relation("SelectedPublicationMedia", fields: [selectedMediaId], references: [id], onDelete: Restrict)
 
   @@unique([scheduleId, scheduledFor])
   @@unique([telegramChatId, telegramMessageId])
@@ -637,20 +655,22 @@ model PublicationMedia {
 }
 
 model ModerationRequest {
-  id              String           @id @default(uuid()) @db.Uuid
-  postId          String           @db.Uuid
-  publicationId   String           @db.Uuid
-  versionId       String           @unique @db.Uuid
-  status          ModerationStatus @default(PENDING)
-  feedback        String?
-  decidedByUserId String?          @db.Uuid
-  decidedAt       DateTime?
-  version         Int              @default(1)
-  createdAt       DateTime         @default(now())
-  post            Post             @relation(fields: [postId], references: [id], onDelete: Restrict)
-  publication     Publication      @relation(fields: [publicationId], references: [id], onDelete: Restrict)
-  postVersion     PostVersion      @relation(fields: [versionId], references: [id], onDelete: Restrict)
-  decidedBy       User?            @relation("ModerationDecisionActor", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  fundedPublications Publication[]                @relation("CurrentRevisionFunding")
+  costConfirmations  GenerationCostConfirmation[]
+  id                 String                       @id @default(uuid()) @db.Uuid
+  postId             String                       @db.Uuid
+  publicationId      String                       @db.Uuid
+  versionId          String                       @unique @db.Uuid
+  status             ModerationStatus             @default(PENDING)
+  feedback           String?
+  decidedByUserId    String?                      @db.Uuid
+  decidedAt          DateTime?
+  version            Int                          @default(1)
+  createdAt          DateTime                     @default(now())
+  post               Post                         @relation(fields: [postId], references: [id], onDelete: Restrict)
+  publication        Publication                  @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  postVersion        PostVersion                  @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  decidedBy          User?                        @relation("ModerationDecisionActor", fields: [decidedByUserId], references: [id], onDelete: Restrict)
 
   @@index([publicationId, status])
   @@index([postId, createdAt])
@@ -794,4 +814,22 @@ model AuditEvent {
 
   @@index([entityType, entityId, createdAt])
   @@index([userId, createdAt])
+}
+
+model GenerationCostConfirmation {
+  id                  String            @id @default(uuid()) @db.Uuid
+  userId              String            @db.Uuid
+  publicationId       String            @db.Uuid
+  moderationRequestId String            @db.Uuid
+  moderationVersion   Int
+  allowanceVersion    Int
+  units               Int
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime          @default(now())
+  user                User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  publication         Publication       @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  moderationRequest   ModerationRequest @relation(fields: [moderationRequestId], references: [id], onDelete: Restrict)
+
+  @@index([publicationId, createdAt])
 }
