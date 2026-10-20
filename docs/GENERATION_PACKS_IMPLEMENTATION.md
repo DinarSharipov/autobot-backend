@@ -18,8 +18,8 @@ generation pipeline требуют отдельного решения и accept
 Тестовый payment lifecycle реализован additive-срезом: создание/проверка платежа, verified webhook,
 атомарный grant/fulfillment и явный reconciler CLI. Checkout и webhook по умолчанию выключены;
 требуются test shop и allowlist. Актуальный контракт, ограничения и rollout описаны в
-[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md). Refund compensation, полный media/revision
-acceptance и production Stars остаются следующими срезами.
+[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md). Verified refund compensation и политика задолженности описаны в [BILLING_REFUNDS.md](BILLING_REFUNDS.md).
+Полный media/revision acceptance и production Stars остаются следующими срезами.
 
 ## Что заменить
 

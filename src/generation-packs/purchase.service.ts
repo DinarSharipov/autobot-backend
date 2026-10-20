@@ -13,6 +13,9 @@ export type PurchaseOrderView = {
   currency: string;
   packVersion: number;
   status: string;
+  refundStatus: 'NONE' | 'PARTIAL' | 'FULL';
+  refundedMinor: number;
+  refundedUnits: number;
   paymentStatus: string;
   fulfillmentStatus: string;
   fulfilledAt: string | null;
@@ -111,6 +114,8 @@ export class PurchaseService {
     priceMinor: number;
     currency: string;
     packVersion: number;
+    refundedMinor?: number;
+    refundedUnits?: number;
     fulfillmentStatus?: string;
     fulfilledAt?: Date | null;
     providerOrderId?: string | null;
@@ -129,6 +134,13 @@ export class PurchaseService {
       currency: order.currency,
       packVersion: order.packVersion,
       status: order.status,
+      refundStatus: !order.refundedMinor
+        ? 'NONE'
+        : order.refundedMinor === order.priceMinor
+          ? 'FULL'
+          : 'PARTIAL',
+      refundedMinor: order.refundedMinor ?? 0,
+      refundedUnits: order.refundedUnits ?? 0,
       paymentStatus:
         order.status === 'AWAITING_PAYMENT'
           ? 'PENDING'

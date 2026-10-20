@@ -7,12 +7,18 @@ import type { AuthPrincipal } from '../common/auth/auth-principal.js';
 import { CurrentPrincipal } from '../common/auth/current-principal.decorator.js';
 import { ApiHttpException } from '../common/http/api-http.exception.js';
 import { requirePrincipalUserId } from '../common/http/request-contracts.js';
+import { RefundsService } from './refunds.service.js';
 import { PaymentsService } from './payments.service.js';
 import { purchaseOrderResponse } from './billing.openapi.js';
 
 const notification = z.object({
   type: z.literal('notification'),
-  event: z.enum(['payment.succeeded', 'payment.canceled', 'payment.waiting_for_capture']),
+  event: z.enum([
+    'payment.succeeded',
+    'payment.canceled',
+    'payment.waiting_for_capture',
+    'refund.succeeded',
+  ]),
   object: z.object({ id: z.string().uuid() }),
 });
 
@@ -48,12 +54,15 @@ export class PaymentsController {
 @ApiTags('Payments')
 @Controller({ version: '1', path: 'payments/yookassa' })
 export class YooKassaWebhookController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly refunds: RefundsService,
+  ) {}
 
   @Post('webhook')
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Receive a notification; verify payment with YooKassa before granting credits',
+    summary: 'Receive a notification; verify payments and refunds before changing credits',
   })
   @ApiBody({
     schema: {
@@ -63,7 +72,12 @@ export class YooKassaWebhookController {
         type: { type: 'string', enum: ['notification'] },
         event: {
           type: 'string',
-          enum: ['payment.succeeded', 'payment.canceled', 'payment.waiting_for_capture'],
+          enum: [
+            'payment.succeeded',
+            'payment.canceled',
+            'payment.waiting_for_capture',
+            'refund.succeeded',
+          ],
         },
         object: {
           type: 'object',
@@ -82,6 +96,8 @@ export class YooKassaWebhookController {
         'INVALID_PAYMENT_NOTIFICATION',
         'Invalid payment notification.',
       );
+    if (parsed.data.event === 'refund.succeeded')
+      return this.refunds.webhook(parsed.data.object.id);
     return this.payments.webhook(parsed.data.event, parsed.data.object.id);
   }
 }

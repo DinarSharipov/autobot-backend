@@ -24,6 +24,7 @@ export type WalletBalance = {
   creditType: CreditType;
   available: number;
   reserved: number;
+  debt: number;
   version: number;
 };
 
@@ -32,7 +33,7 @@ export type CreditGrant = {
   creditType: CreditType;
   units: number;
   operationKey: string;
-  kind: Extract<CreditLedgerKind, 'GIFT' | 'PURCHASE' | 'REFUND' | 'ADJUSTMENT'>;
+  kind: Extract<CreditLedgerKind, 'GIFT' | 'PURCHASE' | 'ADJUSTMENT'>;
   purchaseOrderId?: string;
   metadata?: Prisma.InputJsonValue;
 };
@@ -60,7 +61,7 @@ export class WalletService {
     await this.grantOnboardingGift(userId);
     const wallets = await this.prisma.generationWallet.findMany({
       where: { userId },
-      select: { creditType: true, available: true, reserved: true, version: true },
+      select: { creditType: true, available: true, reserved: true, debt: true, version: true },
     });
     const byType = new Map(wallets.map((wallet) => [wallet.creditType, wallet]));
     return Object.values(CreditType).map((creditType) => {
@@ -69,6 +70,7 @@ export class WalletService {
         creditType,
         available: wallet?.available ?? 0,
         reserved: wallet?.reserved ?? 0,
+        debt: wallet?.debt ?? 0,
         version: wallet?.version ?? 0,
       };
     });
@@ -127,11 +129,7 @@ export class WalletService {
   async grant(input: CreditGrant, database?: Prisma.TransactionClient): Promise<WalletBalance> {
     this.assertInput(input);
     const operation = async (transaction: Prisma.TransactionClient) => {
-      const wallet = await transaction.generationWallet.upsert({
-        where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
-        create: { userId: input.userId, creditType: input.creditType },
-        update: {},
-      });
+      const wallet = await this.ensureWallet(transaction, input.userId, input.creditType);
       const existing = await transaction.creditLedgerEntry.findUnique({
         where: { walletId_operationKey: { walletId: wallet.id, operationKey: input.operationKey } },
       });
@@ -145,9 +143,14 @@ export class WalletService {
         }
         return this.balance(wallet);
       }
+      const debtRepaid = Math.min(wallet.debt ?? 0, input.units);
       const updated = await transaction.generationWallet.update({
         where: { id: wallet.id },
-        data: { available: { increment: input.units }, version: { increment: 1 } },
+        data: {
+          available: { increment: input.units - debtRepaid },
+          debt: { decrement: debtRepaid },
+          version: { increment: 1 },
+        },
       });
       await transaction.creditLedgerEntry.create({
         data: {
@@ -162,6 +165,77 @@ export class WalletService {
       return this.balance(updated);
     };
     return database ? operation(database) : serializableTransaction(this.prisma, operation);
+  }
+
+  async compensateRefund(
+    input: {
+      userId: string;
+      creditType: CreditType;
+      units: number;
+      purchaseOrderId: string;
+      providerRefundId: string;
+    },
+    transaction: Prisma.TransactionClient,
+  ): Promise<void> {
+    const operationKey = `refund:${input.providerRefundId}`;
+    this.assertInput({ units: input.units, operationKey });
+    const wallet = await transaction.generationWallet.findUniqueOrThrow({
+      where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
+    });
+    const existing = await transaction.creditLedgerEntry.findUnique({
+      where: { walletId_operationKey: { walletId: wallet.id, operationKey } },
+    });
+    if (existing) {
+      if (
+        existing.kind !== 'REFUND' ||
+        existing.units !== input.units ||
+        existing.purchaseOrderId !== input.purchaseOrderId
+      ) {
+        throw new ApiHttpException(
+          409,
+          'CREDIT_OPERATION_KEY_REUSED',
+          'Refund operation key was reused.',
+        );
+      }
+      return;
+    }
+    const availableDebited = Math.min(wallet.available, input.units);
+    const debtCreated = input.units - availableDebited;
+    await transaction.generationWallet.update({
+      where: { id: wallet.id },
+      data: {
+        available: { decrement: availableDebited },
+        debt: { increment: debtCreated },
+        version: { increment: 1 },
+      },
+    });
+    await transaction.creditLedgerEntry.create({
+      data: {
+        walletId: wallet.id,
+        kind: 'REFUND',
+        units: input.units,
+        operationKey,
+        purchaseOrderId: input.purchaseOrderId,
+        metadata: { providerRefundId: input.providerRefundId, availableDebited, debtCreated },
+      },
+    });
+  }
+
+  private async ensureWallet(
+    transaction: Prisma.TransactionClient,
+    userId: string,
+    creditType: CreditType,
+  ) {
+    // Prisma's emulated upsert for a compound unique key can race at creation
+    // and raise P2002. Use an explicit INSERT ON CONFLICT DO NOTHING instead.
+    // SERIALIZABLE conflicts still retry the entire outer transaction.
+    await transaction.generationWallet.createMany({
+      data: [{ userId, creditType }],
+      skipDuplicates: true,
+    });
+    return transaction.generationWallet.findUniqueOrThrow({
+      where: { userId_creditType: { userId, creditType } },
+    });
   }
 
   private async mutate(
@@ -185,17 +259,13 @@ export class WalletService {
         );
       }
 
-      const wallet = await transaction.generationWallet.upsert({
-        where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
-        create: { userId: input.userId, creditType: input.creditType },
-        update: {},
-      });
-      if (wallet.available < input.units) {
+      const wallet = await this.ensureWallet(transaction, input.userId, input.creditType);
+      if ((wallet.debt ?? 0) > 0 || wallet.available < input.units) {
         throw new ApiHttpException(
           HttpStatus.CONFLICT,
           input.creditType === 'TEXT' ? 'INSUFFICIENT_TEXT_CREDITS' : 'INSUFFICIENT_IMAGE_CREDITS',
           'There are not enough prepaid generation credits.',
-          { available: wallet.available, required: input.units },
+          { available: wallet.available, debt: wallet.debt ?? 0, required: input.units },
         );
       }
 
@@ -247,6 +317,7 @@ export class WalletService {
         id: string;
         available: number;
         reserved: number;
+        debt?: number;
         version: number;
         creditType: CreditType;
       };
@@ -278,10 +349,14 @@ export class WalletService {
       );
     }
 
+    const debtRepaid =
+      action === 'release' ? Math.min(reservation.wallet.debt ?? 0, input.units) : 0;
     const wallet = await transaction.generationWallet.update({
       where: { id: reservation.wallet.id },
       data: {
-        ...(action === 'release' ? { available: { increment: input.units } } : {}),
+        ...(action === 'release'
+          ? { available: { increment: input.units - debtRepaid }, debt: { decrement: debtRepaid } }
+          : {}),
         reserved: { decrement: input.units },
         version: { increment: 1 },
       },
@@ -323,8 +398,15 @@ export class WalletService {
     creditType: CreditType;
     available: number;
     reserved: number;
+    debt?: number;
     version: number;
   }): WalletBalance {
-    return wallet;
+    return {
+      creditType: wallet.creditType,
+      available: wallet.available,
+      reserved: wallet.reserved,
+      debt: wallet.debt ?? 0,
+      version: wallet.version,
+    };
   }
 }

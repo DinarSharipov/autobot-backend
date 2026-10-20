@@ -7,7 +7,11 @@ import { WalletService } from './wallet.service.js';
 function transaction() {
   return {
     generationReservation: { findUnique: vi.fn().mockResolvedValue(null), create: vi.fn() },
-    generationWallet: { upsert: vi.fn(), update: vi.fn() },
+    generationWallet: {
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: vi.fn(),
+      update: vi.fn(),
+    },
     creditLedgerEntry: { create: vi.fn().mockResolvedValue({}), findUnique: vi.fn() },
   };
 }
@@ -22,7 +26,7 @@ function serviceFor(tx: ReturnType<typeof transaction>) {
 describe('WalletService', () => {
   it('reserves a credit once and records an append-only reservation entry', async () => {
     const tx = transaction();
-    tx.generationWallet.upsert.mockResolvedValue({
+    tx.generationWallet.findUniqueOrThrow.mockResolvedValue({
       id: 'wallet-1',
       available: 2,
       reserved: 0,
@@ -48,6 +52,7 @@ describe('WalletService', () => {
       creditType: CreditType.TEXT,
       available: 1,
       reserved: 1,
+      debt: 0,
       version: 2,
     });
     expect(tx.creditLedgerEntry.create).toHaveBeenCalledWith({
@@ -61,7 +66,7 @@ describe('WalletService', () => {
 
   it('rejects a reservation when the available balance is exhausted', async () => {
     const tx = transaction();
-    tx.generationWallet.upsert.mockResolvedValue({
+    tx.generationWallet.findUniqueOrThrow.mockResolvedValue({
       id: 'wallet-1',
       available: 0,
       reserved: 0,
@@ -111,7 +116,7 @@ describe('WalletService', () => {
 
   it('credits an onboarding gift idempotently through the append-only ledger', async () => {
     const tx = transaction();
-    tx.generationWallet.upsert.mockResolvedValue({
+    tx.generationWallet.findUniqueOrThrow.mockResolvedValue({
       id: 'wallet-1',
       available: 0,
       reserved: 0,
@@ -137,6 +142,10 @@ describe('WalletService', () => {
     expect(result).toMatchObject({ available: 5, reserved: 0, version: 2 });
     expect(tx.creditLedgerEntry.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ kind: 'GIFT', units: 5 }),
+    });
+    expect(tx.generationWallet.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'user-1', creditType: CreditType.TEXT }],
+      skipDuplicates: true,
     });
   });
 });

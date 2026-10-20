@@ -53,7 +53,8 @@ Environment secrets:
 - `YOOKASSA_SECRET_KEY`
 
 The test checkout contract and controlled rollout procedure are in
-[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md).
+[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md). Verified refunds, debt accounting and rollback
+restrictions are documented in [BILLING_REFUNDS.md](BILLING_REFUNDS.md).
 Set `YOOKASSA_RETURN_URL` as a non-secret server runtime variable for test checkout. A redirect to
 this URL never confirms payment; fulfillment requires a verified provider status or webhook.
 

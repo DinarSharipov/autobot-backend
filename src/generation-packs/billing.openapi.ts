@@ -14,11 +14,18 @@ export const packSchema: SchemaObject = {
 };
 export const walletSchema: SchemaObject = {
   type: 'object',
-  required: ['creditType', 'available', 'reserved', 'version'],
+  required: ['creditType', 'available', 'reserved', 'debt', 'version'],
   properties: {
     creditType: { type: 'string', enum: ['TEXT', 'IMAGE'] },
     available: { type: 'integer', example: 3 },
     reserved: { type: 'integer', example: 0 },
+    debt: {
+      type: 'integer',
+      minimum: 0,
+      example: 0,
+      description:
+        'Credits revoked after a refund that could not be recovered from available balance. New credit reservations are blocked until incoming credits repay this debt.',
+    },
     version: { type: 'integer', example: 1 },
   },
 };
@@ -30,7 +37,11 @@ export const ledgerSchema: SchemaObject = {
       type: 'string',
       enum: ['GIFT', 'PURCHASE', 'RESERVE', 'COMMIT', 'RELEASE', 'REFUND', 'ADJUSTMENT'],
     },
-    units: { type: 'integer' },
+    units: {
+      type: 'integer',
+      description:
+        'Positive operation magnitude. REFUND entries revoke credits (debit), including debt when credits were already spent or reserved.',
+    },
     operationKey: { type: 'string' },
     publicationId: { type: 'string', nullable: true, format: 'uuid' },
     purchaseOrderId: { type: 'string', nullable: true, format: 'uuid' },
@@ -54,6 +65,9 @@ export const purchaseOrderSchema: SchemaObject = {
     'packVersion',
     'status',
     'paymentStatus',
+    'refundStatus',
+    'refundedMinor',
+    'refundedUnits',
     'fulfillmentStatus',
     'fulfilledAt',
     'providerPaymentId',
@@ -79,6 +93,9 @@ export const purchaseOrderSchema: SchemaObject = {
       type: 'string',
       enum: ['NOT_CREATED', 'PENDING', 'SUCCEEDED', 'CANCELLED', 'EXPIRED', 'FAILED'],
     },
+    refundStatus: { type: 'string', enum: ['NONE', 'PARTIAL', 'FULL'] },
+    refundedMinor: { type: 'integer', minimum: 0 },
+    refundedUnits: { type: 'integer', minimum: 0 },
     fulfillmentStatus: { type: 'string', enum: ['PENDING', 'FULFILLED'] },
     fulfilledAt: { type: 'string', nullable: true, format: 'date-time' },
     providerPaymentId: { type: 'string', nullable: true, format: 'uuid' },
@@ -108,3 +125,32 @@ export function billingResponse(schema: SchemaObject, list = false): SchemaObjec
   };
 }
 export const purchaseOrderResponse = billingResponse(purchaseOrderSchema);
+
+export const refundSchema: SchemaObject = {
+  type: 'object',
+  required: [
+    'id',
+    'providerRefundId',
+    'amountMinor',
+    'currency',
+    'status',
+    'compensatedUnits',
+    'compensatedAt',
+    'createdAt',
+  ],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    providerRefundId: { type: 'string', format: 'uuid' },
+    amountMinor: { type: 'integer', minimum: 1 },
+    currency: { type: 'string', example: 'RUB' },
+    status: { type: 'string', enum: ['PENDING', 'SUCCEEDED', 'CANCELLED'] },
+    compensatedUnits: {
+      type: 'integer',
+      minimum: 0,
+      description:
+        'Credits revoked by this refund. Cumulative rounding may produce zero for small partial refunds.',
+    },
+    compensatedAt: { type: 'string', nullable: true, format: 'date-time' },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+};

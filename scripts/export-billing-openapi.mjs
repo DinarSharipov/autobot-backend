@@ -6,6 +6,7 @@ import {
   walletSchema,
   ledgerSchema,
   purchaseOrderSchema,
+  refundSchema,
 } from '../src/generation-packs/billing.openapi.js';
 
 const response = (schema) => ({
@@ -153,6 +154,22 @@ const paths = {
       [orderId],
     ),
   },
+  '/purchase-orders/{orderId}/refunds': {
+    get: operation(
+      'listOrderRefunds',
+      'List latest 100 verified refund states for an owned order',
+      billingResponse(refundSchema, true),
+      [orderId],
+    ),
+  },
+  '/purchase-orders/{orderId}/refunds/check': {
+    post: operation(
+      'checkOrderRefunds',
+      'Discover and verify existing provider refunds without initiating a transfer',
+      billingResponse(purchaseOrderSchema),
+      [orderId],
+    ),
+  },
   '/payments/yookassa/webhook': {
     post: {
       ...operation('yookassaWebhook', 'Untrusted notification; server verification is mandatory', {
@@ -172,7 +189,12 @@ const paths = {
                 type: { type: 'string', enum: ['notification'] },
                 event: {
                   type: 'string',
-                  enum: ['payment.succeeded', 'payment.canceled', 'payment.waiting_for_capture'],
+                  enum: [
+                    'payment.succeeded',
+                    'payment.canceled',
+                    'payment.waiting_for_capture',
+                    'refund.succeeded',
+                  ],
                 },
                 object: {
                   type: 'object',
@@ -192,7 +214,7 @@ const document = {
   openapi: '3.1.0',
   info: {
     title: 'Autobot billing contract',
-    version: '1.0.0',
+    version: '1.1.0',
     description:
       'Additive v1 bot contract. Test-only checkout is disabled by default. Browser mutations require CSRF; bot requests require HMAC companion headers from ADR 0003.',
   },

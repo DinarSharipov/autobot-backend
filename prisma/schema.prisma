@@ -162,6 +162,12 @@ enum CreditFulfillmentStatus {
   FULFILLED
 }
 
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  CANCELLED
+}
+
 enum MediaStatus {
   PENDING
   READY
@@ -438,6 +444,7 @@ model GenerationWallet {
   creditType    CreditType
   available     Int                     @default(0)
   reserved      Int                     @default(0)
+  debt          Int                     @default(0)
   version       Int                     @default(1)
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
@@ -556,6 +563,9 @@ model PurchaseOrder {
   paymentReturnUrl      String?
   fulfillmentStatus     CreditFulfillmentStatus @default(PENDING)
   fulfilledAt           DateTime?
+  refundedMinor         Int                     @default(0)
+  refundedUnits         Int                     @default(0)
+  refundsCheckedAt      DateTime?
   providerOrderId       String?                 @unique
   paymentUrl            String?
   expiresAt             DateTime?
@@ -566,9 +576,27 @@ model PurchaseOrder {
   pack                  GenerationPack          @relation(fields: [packId], references: [id], onDelete: Restrict)
   paymentEvents         PaymentEvent[]
   ledgerEntries         CreditLedgerEntry[]
+  refunds               PaymentRefund[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, status, createdAt])
+}
+
+model PaymentRefund {
+  id               String        @id @default(uuid()) @db.Uuid
+  providerRefundId String        @unique @db.Uuid
+  purchaseOrderId  String        @db.Uuid
+  amountMinor      Int
+  currency         String
+  status           RefundStatus
+  compensatedUnits Int           @default(0)
+  compensatedAt    DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+
+  @@index([purchaseOrderId, createdAt])
+  @@index([status, updatedAt])
 }
 
 model PaymentEvent {

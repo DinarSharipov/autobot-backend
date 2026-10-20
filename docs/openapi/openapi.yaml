@@ -51,6 +51,10 @@ paths:
     $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1payment"
   /purchase-orders/{orderId}/payment/check:
     $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1payment~1check"
+  /purchase-orders/{orderId}/refunds:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1refunds"
+  /purchase-orders/{orderId}/refunds/check:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1refunds~1check"
   /payments/yookassa/webhook:
     $ref: "./billing.openapi.json#/paths/~1payments~1yookassa~1webhook"
   /auth/telegram/start:

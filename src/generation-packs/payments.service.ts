@@ -115,6 +115,29 @@ export class PaymentsService {
     return { received: true };
   }
 
+  async confirmForRefund(paymentId: string): Promise<PurchaseOrder> {
+    const payment = await this.provider.getPayment(paymentId);
+    if (payment.id !== paymentId || payment.status !== 'succeeded' || !payment.paid) {
+      throw this.error('REFUND_PAYMENT_NOT_CONFIRMED');
+    }
+    const order = await this.prisma.purchaseOrder.findFirst({
+      where: {
+        OR: [
+          { providerOrderId: paymentId },
+          {
+            id: payment.metadata.order_id,
+            paymentIdempotencyKey: payment.metadata.payment_attempt_id,
+          },
+        ],
+      },
+    });
+    if (!order) throw this.error('PURCHASE_ORDER_NOT_FOUND', 404);
+    // Reuse exact shop/amount/currency/order/test verification. Also recover a
+    // succeeded payment whose original grant has not yet been fulfilled.
+    await this.apply(order, payment);
+    return this.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: order.id } });
+  }
+
   async reconcile(limit = 100) {
     const orders = await this.prisma.purchaseOrder.findMany({
       where: {

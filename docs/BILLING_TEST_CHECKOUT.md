@@ -19,7 +19,7 @@ References checked on 2026-10-20:
 
 ## Stable additive contract
 
-The machine-readable contract is [billing.openapi.json](openapi/billing.openapi.json), version 1.0.0.
+The machine-readable contract is [billing.openapi.json](openapi/billing.openapi.json), version 1.1.0.
 The main [OpenAPI document](openapi/openapi.yaml) references all billing paths. The running backend
 publishes concrete schemas at `/api/docs-json` and Swagger UI at `/api/docs`.
 
@@ -76,6 +76,9 @@ Order after checkout creation:
     "currency": "RUB",
     "packVersion": 1,
     "status": "AWAITING_PAYMENT",
+    "refundStatus": "NONE",
+    "refundedMinor": 0,
+    "refundedUnits": 0,
     "paymentStatus": "PENDING",
     "fulfillmentStatus": "PENDING",
     "fulfilledAt": null,
@@ -126,7 +129,7 @@ checks. Transient provider failures return non-200 so delivery can retry. Option
 rate limiting/IP restrictions can supplement verification, using the official current IP list.
 
 The PURCHASE ledger grant and order PAID/FULFILLED state share one serializable transaction.
-Retries cannot grant twice. A failed transaction leaves no partial grant. The reconciler handles
+Retries cannot grant twice. A failed transaction leaves no partial grant. The payment reconciler handles
 pending payments, unknown create responses inside the safe replay window, and PAID/PENDING orders.
 It processes up to 100 oldest candidates per run; failed candidates are counted and require follow-up.
 There is no automatically enabled recurring job in this slice.
@@ -138,7 +141,7 @@ npm run payments:reconcile
 docker exec autobot-api node dist/payment-reconcile.js
 ```
 
-Reconciliation emits aggregate counts and exits nonzero when any candidate fails. It never emits
+Reconciliation emits aggregate payment counts plus additive refund counters and exits nonzero when any candidate fails. It never emits
 credentials, raw payloads or personal data.
 
 ## Migration, seed and rollback
@@ -164,8 +167,8 @@ Before deployment take a verified database backup. Operational rollback is **app
 disable new checkout, retain webhook/check/reconciliation until in-flight payments finish, then
 redeploy the previous known-good SHA. Keep the additive columns and PaymentEvents/ledger intact.
 Never drop paid orders, rewrite ledger entries, or run a production down migration to undo payment.
-Refund compensation and production Stars integration are separate pending slices; do not advertise
-refund automation until implemented.
+Verified refund compensation is covered in [BILLING_REFUNDS.md](BILLING_REFUNDS.md). Money-transfer
+initiation and production Stars integration remain separate work.
 
 ## Configuration and controlled test procedure
 
@@ -208,6 +211,8 @@ checkout/webhook to false. The routine secret merge preserves the server's nonse
 No real payment has been performed as part of the automated verification. Provider HTTP is mocked,
 while NestJS, PostgreSQL transactions, HMAC authentication and migration images are real.
 
+For the refund policy, debt fields and new refund endpoints see [BILLING_REFUNDS.md](BILLING_REFUNDS.md).
+
 ## Request status after this slice
 
 | Original item                                                                           | Status                                                   |
@@ -217,7 +222,7 @@ while NestJS, PostgreSQL transactions, HMAC authentication and migration images 
 | YooKassa capture/redirect/durable idempotency                                           | done for test checkout                                   |
 | Verified webhook, duplicate/out-of-order handling, atomic fulfillment                   | done for test checkout                                   |
 | Pending/paid-but-unfulfilled reconciliation                                             | done as explicit bounded CLI; scheduling pending rollout |
-| Compensating refunds                                                                    | pending                                                  |
+| Compensating refunds                                                                    | done for verified test refunds; see BILLING_REFUNDS.md   |
 | Full prepaid revision/image/resume flow and acceptance matrix                           | pending separate slice                                   |
 | Controlled real provider test, production secret presence verification for this release | pending deployment                                       |
 | Production channel/Stars implementation and global prepaid activation                   | pending decision/implementation; disabled                |

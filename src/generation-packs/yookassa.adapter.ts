@@ -22,6 +22,20 @@ const paymentSchema = z.object({
   expires_at: z.iso.datetime({ offset: true }).optional(),
 });
 
+const refundSchema = z.object({
+  id: z.uuid(),
+  payment_id: z.uuid(),
+  status: z.enum(['pending', 'succeeded', 'canceled']),
+  amount: z.object({ value: z.string().regex(/^\d+\.\d{2}$/), currency: z.string() }),
+  created_at: z.iso.datetime({ offset: true }),
+});
+const refundListSchema = z.object({
+  type: z.literal('list'),
+  items: z.array(refundSchema).max(100),
+  next_cursor: z.string().min(1).max(1024).optional(),
+});
+export type YooKassaRefund = z.infer<typeof refundSchema>;
+
 export type YooKassaPayment = z.infer<typeof paymentSchema>;
 
 export function minorAmount(value: number): string {
@@ -39,23 +53,45 @@ export class YooKassaAdapter {
     idempotencyKey: string;
     returnUrl: string;
   }): Promise<YooKassaPayment> {
-    return this.request('/payments', {
-      method: 'POST',
-      headers: { 'idempotence-key': input.idempotencyKey },
-      body: JSON.stringify({
-        amount: { value: minorAmount(input.amountMinor), currency: input.currency },
-        capture: true,
-        confirmation: { type: 'redirect', return_url: input.returnUrl },
-        metadata: { order_id: input.orderId, payment_attempt_id: input.idempotencyKey },
-      }),
-    });
+    return this.request(
+      '/payments',
+      {
+        method: 'POST',
+        headers: { 'idempotence-key': input.idempotencyKey },
+        body: JSON.stringify({
+          amount: { value: minorAmount(input.amountMinor), currency: input.currency },
+          capture: true,
+          confirmation: { type: 'redirect', return_url: input.returnUrl },
+          metadata: { order_id: input.orderId, payment_attempt_id: input.idempotencyKey },
+        }),
+      },
+      paymentSchema,
+    );
   }
 
   getPayment(paymentId: string): Promise<YooKassaPayment> {
-    return this.request(`/payments/${encodeURIComponent(paymentId)}`, { method: 'GET' });
+    return this.request(
+      `/payments/${encodeURIComponent(paymentId)}`,
+      { method: 'GET' },
+      paymentSchema,
+    );
   }
 
-  private async request(path: string, options: RequestInit): Promise<YooKassaPayment> {
+  getRefund(refundId: string): Promise<YooKassaRefund> {
+    return this.request(
+      `/refunds/${encodeURIComponent(refundId)}`,
+      { method: 'GET' },
+      refundSchema,
+    );
+  }
+
+  listRefunds(paymentId: string, cursor?: string) {
+    const query = new URLSearchParams({ payment_id: paymentId, limit: '100' });
+    if (cursor) query.set('cursor', cursor);
+    return this.request(`/refunds?${query.toString()}`, { method: 'GET' }, refundListSchema);
+  }
+
+  private async request<T>(path: string, options: RequestInit, schema: z.ZodType<T>): Promise<T> {
     const shopId = this.config.get('YOOKASSA_SHOP_ID', { infer: true });
     const secretKey = this.config.get('YOOKASSA_SECRET_KEY', { infer: true });
     if (!shopId || !secretKey) throw this.error('PAYMENT_PROVIDER_NOT_CONFIGURED', 503);
@@ -76,7 +112,7 @@ export class YooKassaAdapter {
         },
       );
       if (!response.ok) throw this.error('PAYMENT_PROVIDER_UNAVAILABLE', 503);
-      const payment = paymentSchema.safeParse(await response.json());
+      const payment = schema.safeParse(await response.json());
       if (!payment.success) throw this.error('PAYMENT_PROVIDER_INVALID_RESPONSE', 502);
       return payment.data;
     } catch (error) {

@@ -13,9 +13,10 @@ import { canonicalBotRequest } from '../src/auth/bot-request-signature.service.j
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { IdentityService } from '../src/users/identity.service.js';
 import { PurchaseService } from '../src/generation-packs/purchase.service.js';
+import { RefundsService } from '../src/generation-packs/refunds.service.js';
 import { PaymentsService } from '../src/generation-packs/payments.service.js';
 import { WalletService } from '../src/generation-packs/wallet.service.js';
-import type { YooKassaPayment } from '../src/generation-packs/yookassa.adapter.js';
+import type { YooKassaPayment, YooKassaRefund } from '../src/generation-packs/yookassa.adapter.js';
 import { withoutBackgroundJobs } from './support/without-background-jobs.js';
 import { cleanTestDatabase } from './support/test-database.js';
 
@@ -23,6 +24,7 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
   let app: NestExpressApplication;
   let prisma: PrismaService;
   let payments: PaymentsService;
+  let refunds: RefundsService;
   let wallets: WalletService;
   let purchases: PurchaseService;
   let config: ConfigService;
@@ -30,8 +32,38 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
   let ownerTelegramId: string;
   let lostResponse = false;
   const providerPayments = new Map<string, YooKassaPayment>();
+  const providerRefunds = new Map<string, YooKassaRefund>();
+  let failRefundReads = false;
+  let refundPageSize = 100;
   const attempts = new Map<string, string>();
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (url.startsWith('https://api.yookassa.ru/v3/refunds')) {
+      if (init?.method !== 'GET')
+        throw new Error('Refund money transfers are forbidden in this slice');
+      if (failRefundReads) return Promise.resolve(new Response('{}', { status: 503 }));
+      const parsed = new URL(url);
+      if (parsed.pathname === '/v3/refunds') {
+        const items = [...providerRefunds.values()]
+          .filter((refund) => refund.payment_id === parsed.searchParams.get('payment_id'))
+          .reverse();
+        const offset = Number(parsed.searchParams.get('cursor') ?? 0);
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              type: 'list',
+              items: items.slice(offset, offset + refundPageSize),
+              ...(offset + refundPageSize < items.length
+                ? { next_cursor: String(offset + refundPageSize) }
+                : {}),
+            }),
+          ),
+        );
+      }
+      const refund = providerRefunds.get(parsed.pathname.split('/').at(-1) ?? '');
+      return Promise.resolve(
+        new Response(JSON.stringify(refund ?? {}), { status: refund ? 200 : 404 }),
+      );
+    }
     if (!url.startsWith('https://api.yookassa.ru/v3/payments'))
       throw new Error('Unexpected provider request');
     if (init?.method === 'POST') {
@@ -85,12 +117,16 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
     await app.init();
     prisma = app.get(PrismaService);
     payments = app.get(PaymentsService);
+    refunds = app.get(RefundsService);
     purchases = app.get(PurchaseService);
     wallets = app.get(WalletService);
   });
   beforeEach(async () => {
     await cleanTestDatabase(prisma, process.env.DATABASE_URL ?? '');
     providerPayments.clear();
+    providerRefunds.clear();
+    failRefundReads = false;
+    refundPageSize = 100;
     attempts.clear();
     fetchMock.mockClear();
     lostResponse = false;
@@ -174,6 +210,8 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
       'purchase-orders/{orderId}',
       'purchase-orders/{orderId}/payment',
       'purchase-orders/{orderId}/payment/check',
+      'purchase-orders/{orderId}/refunds',
+      'purchase-orders/{orderId}/refunds/check',
       'payments/yookassa/webhook',
     ]) {
       expect(document.paths[`/api/v1/${path}`]).toBeDefined();
@@ -338,7 +376,7 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
   });
 
   it('onboards once and reserves the final credit atomically', async () => {
-    await Promise.all([wallets.balances(userId), wallets.balances(userId)]);
+    await Promise.all(Array.from({ length: 8 }, () => wallets.balances(userId)));
     expect(await prisma.creditLedgerEntry.count({ where: { kind: 'GIFT' } })).toBe(2);
     const results = await Promise.allSettled(
       [1, 2, 3].map((n) =>
@@ -452,5 +490,383 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
     ]);
     expect(results[0]?.id).toBe(results[1]?.id);
     expect(await prisma.purchaseOrder.count({ where: { userId } })).toBe(1);
+  });
+  async function paidOrder() {
+    const result = await start();
+    result.payment.status = 'succeeded';
+    result.payment.paid = true;
+    await payments.check(userId, result.orderId);
+    return result;
+  }
+  function refund(
+    paymentId: string,
+    value = '99.00',
+    status: YooKassaRefund['status'] = 'succeeded',
+  ) {
+    const result: YooKassaRefund = {
+      id: randomUUID(),
+      payment_id: paymentId,
+      amount: { value, currency: 'RUB' },
+      status,
+      created_at: new Date().toISOString(),
+    };
+    providerRefunds.set(result.id, result);
+    return result;
+  }
+  function refundWebhook(id: string) {
+    return webhook(id, 'refund.succeeded');
+  }
+
+  it('revokes a full refund exactly once under duplicate webhook and polling races', async () => {
+    const { orderId, payment } = await paidOrder();
+    const result = refund(payment.id);
+    fetchMock.mockClear();
+    const responses = await Promise.all([
+      refundWebhook(result.id),
+      refundWebhook(result.id),
+      signed('POST', `/api/v1/purchase-orders/${orderId}/refunds/check`),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(1);
+    expect(await prisma.paymentRefund.count()).toBe(1);
+    expect(await purchases.get(userId, orderId)).toMatchObject({
+      status: 'PAID',
+      refundStatus: 'FULL',
+      refundedMinor: 9900,
+      refundedUnits: 20,
+    });
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 0, reserved: 0, debt: 0 });
+    const history = await prisma.paymentEvent.findMany({ orderBy: { id: 'asc' } });
+    await refundWebhook(result.id).expect(200);
+    expect(await prisma.paymentEvent.findMany({ orderBy: { id: 'asc' } })).toEqual(history);
+    expect(fetchMock.mock.calls.every((call) => call[1]?.method === 'GET')).toBe(true);
+  });
+
+  it('carries fractional partial refunds forward without over-revoking credits', async () => {
+    const { orderId, payment } = await paidOrder();
+    const tiny = refund(payment.id, '0.01');
+    await refundWebhook(tiny.id).expect(200);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(0);
+    expect(
+      await prisma.paymentRefund.findUnique({ where: { providerRefundId: tiny.id } }),
+    ).toMatchObject({ status: 'SUCCEEDED', compensatedUnits: 0 });
+    const half = refund(payment.id, '49.49');
+    await refundWebhook(half.id).expect(200);
+    expect(await purchases.get(userId, orderId)).toMatchObject({
+      refundStatus: 'PARTIAL',
+      refundedMinor: 4950,
+      refundedUnits: 10,
+    });
+    const rest = refund(payment.id, '49.50');
+    await refundWebhook(rest.id).expect(200);
+    expect(await purchases.get(userId, orderId)).toMatchObject({
+      refundStatus: 'FULL',
+      refundedUnits: 20,
+    });
+    const sum = await prisma.creditLedgerEntry.aggregate({
+      where: { kind: 'REFUND' },
+      _sum: { units: true },
+    });
+    expect(sum._sum.units).toBe(20);
+    await refunds.check(userId, orderId);
+    expect((await purchases.get(userId, orderId)).refundedUnits).toBe(20);
+  });
+
+  it('serializes concurrent partial refunds independently of notification order', async () => {
+    const { orderId, payment } = await paidOrder();
+    const partials = [
+      refund(payment.id, '33.00'),
+      refund(payment.id, '33.00'),
+      refund(payment.id, '33.00'),
+    ];
+    const responses = await Promise.all(
+      partials.reverse().map((partial) => refundWebhook(partial.id)),
+    );
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    expect(await purchases.get(userId, orderId)).toMatchObject({
+      refundStatus: 'FULL',
+      refundedMinor: 9900,
+      refundedUnits: 20,
+    });
+    expect(
+      (
+        await prisma.creditLedgerEntry.aggregate({
+          where: { kind: 'REFUND' },
+          _sum: { units: true },
+        })
+      )._sum.units,
+    ).toBe(20);
+  });
+
+  it('never compensates pending/canceled refunds or regresses a succeeded refund', async () => {
+    const { orderId, payment } = await paidOrder();
+    const pending = refund(payment.id, '49.50', 'pending');
+    await refundWebhook(pending.id).expect(200);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(0);
+    pending.status = 'canceled';
+    await refunds.check(userId, orderId);
+    expect(
+      await prisma.paymentRefund.findUnique({ where: { providerRefundId: pending.id } }),
+    ).toMatchObject({ status: 'CANCELLED', compensatedUnits: 0 });
+    expect((await purchases.get(userId, orderId)).refundedMinor).toBe(0);
+    const success = refund(payment.id, '49.50');
+    await refundWebhook(success.id).expect(200);
+    success.status = 'pending';
+    await refundWebhook(success.id).expect(200);
+    expect(
+      await prisma.paymentRefund.findUnique({ where: { providerRefundId: success.id } }),
+    ).toMatchObject({ status: 'SUCCEEDED', compensatedUnits: 10 });
+    expect((await purchases.get(userId, orderId)).refundedMinor).toBe(4950);
+  });
+
+  it.each(['amount', 'currency', 'shop', 'live', 'refund-id', 'payment-id', 'payment-pending'])(
+    'rejects refund %s mismatch without revoking credits',
+    async (mismatch) => {
+      const { orderId, payment } = await paidOrder();
+      const result = refund(payment.id);
+      const expectedId = result.id;
+      if (mismatch === 'amount') result.amount.value = '99.01';
+      if (mismatch === 'currency') result.amount.currency = 'USD';
+      if (mismatch === 'shop') payment.recipient.account_id = 'other-shop';
+      if (mismatch === 'live') payment.test = false;
+      if (mismatch === 'refund-id') result.id = randomUUID();
+      if (mismatch === 'payment-id') result.payment_id = randomUUID();
+      if (mismatch === 'payment-pending') {
+        payment.status = 'pending';
+        payment.paid = false;
+      }
+      const response = await refundWebhook(expectedId);
+      expect(response.status).toBe(mismatch === 'payment-id' ? 503 : 200);
+      expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(0);
+      expect((await purchases.get(userId, orderId)).refundedUnits).toBe(0);
+    },
+  );
+
+  it('rejects cumulative over-refunds and conflicting amounts for an existing provider ID', async () => {
+    const { orderId, payment } = await paidOrder();
+    const first = refund(payment.id, '66.00');
+    await refundWebhook(first.id).expect(200);
+    const over = refund(payment.id, '34.00');
+    await refundWebhook(over.id).expect(200);
+    expect((await purchases.get(userId, orderId)).refundedMinor).toBe(6600);
+    expect(await prisma.paymentRefund.count()).toBe(1);
+    first.amount.value = '65.00';
+    await refundWebhook(first.id).expect(200);
+    expect((await purchases.get(userId, orderId)).refundedMinor).toBe(6600);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(1);
+  });
+
+  it('records spent credits as debt and repays it before making new credits available', async () => {
+    const { orderId, payment } = await paidOrder();
+    const spend = {
+      userId,
+      creditType: 'TEXT' as const,
+      units: 12,
+      operationKey: 'spent-before-refund',
+    };
+    await wallets.reserve(spend);
+    await wallets.commit(spend);
+    const result = refund(payment.id);
+    await refundWebhook(result.id).expect(200);
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 0, reserved: 0, debt: 12 });
+    await expect(
+      wallets.reserve({ ...spend, units: 1, operationKey: 'new-reserve' }),
+    ).rejects.toMatchObject({
+      response: { code: 'INSUFFICIENT_TEXT_CREDITS', details: { debt: 12 } },
+    });
+    await wallets.grant({
+      userId,
+      creditType: 'TEXT',
+      units: 5,
+      kind: 'PURCHASE',
+      operationKey: 'new-purchase-1',
+    });
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 0, debt: 7 });
+    await wallets.grant({
+      userId,
+      creditType: 'TEXT',
+      units: 10,
+      kind: 'PURCHASE',
+      operationKey: 'new-purchase-2',
+    });
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 3, debt: 0 });
+    await payments.check(userId, orderId);
+    expect(
+      await prisma.creditLedgerEntry.count({ where: { operationKey: `purchase:${orderId}` } }),
+    ).toBe(1);
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 3, debt: 0 });
+  });
+
+  it.each(['release', 'commit'] as const)(
+    'preserves active reserves across a refund and settles %s once',
+    async (settle) => {
+      const { payment } = await paidOrder();
+      const held = { userId, creditType: 'TEXT' as const, units: 4, operationKey: 'held-refund' };
+      await wallets.reserve(held);
+      const result = refund(payment.id);
+      await refundWebhook(result.id).expect(200);
+      expect(
+        await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+      ).toMatchObject({ available: 0, reserved: 4, debt: 4 });
+      await wallets[settle](held);
+      await wallets[settle](held);
+      expect(
+        await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+      ).toMatchObject({ available: 0, reserved: 0, debt: settle === 'release' ? 0 : 4 });
+    },
+  );
+
+  it('does not create usable credits when reserve races with full refund', async () => {
+    const { payment } = await paidOrder();
+    const result = refund(payment.id);
+    const held = { userId, creditType: 'TEXT' as const, units: 20, operationKey: 'racing-refund' };
+    const outcomes = await Promise.allSettled([wallets.reserve(held), refunds.webhook(result.id)]);
+    expect(outcomes[1]?.status).toBe('fulfilled');
+    const wallet = await prisma.generationWallet.findFirstOrThrow({
+      where: { userId, creditType: 'TEXT' },
+    });
+    expect(wallet.available).toBe(0);
+    expect(wallet.available + wallet.reserved - wallet.debt).toBe(0);
+    if (outcomes[0]?.status === 'fulfilled') await wallets.release(held);
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 0, reserved: 0, debt: 0 });
+  });
+
+  it('rolls back partial compensation and recovers a missed webhook through paginated reconciliation', async () => {
+    const { orderId, payment } = await paidOrder();
+    const first = refund(payment.id, '49.50');
+    refund(payment.id, '49.50');
+    refundPageSize = 1;
+    const original = wallets.compensateRefund.bind(wallets);
+    const failure = vi
+      .spyOn(wallets, 'compensateRefund')
+      .mockImplementationOnce(async (input, database) => {
+        await original(input, database);
+        throw new Error('Crash after refund ledger insertion');
+      });
+    await refundWebhook(first.id).expect(500);
+    failure.mockRestore();
+    expect(await prisma.paymentRefund.count()).toBe(0);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(0);
+    expect((await purchases.get(userId, orderId)).refundedMinor).toBe(0);
+    expect(await refunds.reconcile()).toEqual({ scanned: 1, checked: 1, failed: 0 });
+    expect((await purchases.get(userId, orderId)).refundStatus).toBe('FULL');
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(2);
+    expect(await refunds.reconcile()).toEqual({ scanned: 1, checked: 1, failed: 0 });
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(2);
+  });
+
+  it('keeps failed provider reads retryable and processes pending refunds only after success', async () => {
+    const { orderId, payment } = await paidOrder();
+    const result = refund(payment.id, '99.00', 'pending');
+    failRefundReads = true;
+    await refundWebhook(result.id).expect(503);
+    expect(await refunds.reconcile()).toEqual({ scanned: 1, checked: 0, failed: 1 });
+    failRefundReads = false;
+    await refunds.check(userId, orderId);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(0);
+    result.status = 'succeeded';
+    await refunds.reconcile();
+    expect((await purchases.get(userId, orderId)).refundStatus).toBe('FULL');
+  });
+
+  it('owns refund endpoints and never stores raw refund payloads', async () => {
+    const { orderId, payment } = await paidOrder();
+    const result = refund(payment.id);
+    Object.assign(result, { description: 'private-refund-description' });
+    const otherId = '99887777';
+    await app.get(IdentityService).resolveBotUser({ telegramUserId: otherId });
+    fetchMock.mockClear();
+    await signed('GET', `/api/v1/purchase-orders/${orderId}/refunds`, undefined, otherId).expect(
+      404,
+    );
+    await signed(
+      'POST',
+      `/api/v1/purchase-orders/${orderId}/refunds/check`,
+      undefined,
+      otherId,
+    ).expect(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await signed('POST', `/api/v1/purchase-orders/${orderId}/refunds/check`).expect(200);
+    const response = await signed('GET', `/api/v1/purchase-orders/${orderId}/refunds`).expect(200);
+    expect(response.body).toMatchObject({
+      data: [{ status: 'SUCCEEDED', amountMinor: 9900, compensatedUnits: 20 }],
+    });
+    expect(JSON.stringify(await prisma.paymentEvent.findMany())).not.toContain(
+      'private-refund-description',
+    );
+    const walletResponse = await signed('GET', '/api/v1/wallets').expect(200);
+    const walletBody = walletResponse.body as { data: { creditType: string; debt: number }[] };
+    expect(walletBody.data.find((wallet) => wallet.creditType === 'TEXT')).toMatchObject({
+      debt: 0,
+    });
+  });
+  it('roundtrips the refund migration without changing the legacy order snapshot', async () => {
+    const initial = await order();
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`
+        DROP TABLE "PaymentRefund";
+        ALTER TABLE "PurchaseOrder" DROP COLUMN "refundedMinor", DROP COLUMN "refundedUnits", DROP COLUMN "refundsCheckedAt";
+        ALTER TABLE "GenerationWallet" DROP COLUMN "debt";
+        DROP TYPE "RefundStatus";
+      `);
+      const snapshot = await client.query<{ priceMinor: number; units: number }>(
+        'SELECT "priceMinor", "units" FROM "PurchaseOrder" WHERE id = $1',
+        [initial.id],
+      );
+      expect(snapshot.rows).toEqual([{ priceMinor: 9900, units: 20 }]);
+      await client.query(
+        await readFile(
+          'prisma/migrations/20261020120000_refund_compensation/migration.sql',
+          'utf8',
+        ),
+      );
+      const upgraded = await client.query<{ refundedMinor: number; refundedUnits: number }>(
+        'SELECT "refundedMinor", "refundedUnits" FROM "PurchaseOrder" WHERE id = $1',
+        [initial.id],
+      );
+      expect(upgraded.rows).toEqual([{ refundedMinor: 0, refundedUnits: 0 }]);
+    } finally {
+      await client.query('ROLLBACK');
+      await client.end();
+    }
+    expect((await purchases.get(userId, initial.id)).priceMinor).toBe(9900);
+  });
+
+  it('recovers a succeeded refund arriving before the original payment was fulfilled', async () => {
+    const initial = await order();
+    lostResponse = true;
+    await expect(payments.create(userId, initial.id)).rejects.toThrow();
+    const payment = [...providerPayments.values()][0];
+    if (!payment) throw new Error('Missing provider fixture');
+    payment.status = 'succeeded';
+    payment.paid = true;
+    const result = refund(payment.id);
+    await refundWebhook(result.id).expect(200);
+    expect(await purchases.get(userId, initial.id)).toMatchObject({
+      status: 'PAID',
+      fulfillmentStatus: 'FULFILLED',
+      refundStatus: 'FULL',
+      refundedUnits: 20,
+    });
+    expect(
+      await prisma.generationWallet.findFirst({ where: { userId, creditType: 'TEXT' } }),
+    ).toMatchObject({ available: 0, debt: 0 });
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'PURCHASE' } })).toBe(1);
+    expect(await prisma.creditLedgerEntry.count({ where: { kind: 'REFUND' } })).toBe(1);
   });
 });
