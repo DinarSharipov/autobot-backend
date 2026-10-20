@@ -8,17 +8,20 @@ import { PurchaseService } from './purchase.service.js';
 import { WalletService } from './wallet.service.js';
 import { GenerationFundingService } from './generation-funding.service.js';
 import { RevisionAllowanceService } from './revision-allowance.service.js';
+import { PaymentsService } from './payments.service.js';
+import { PaymentsController, YooKassaWebhookController } from './payments.controller.js';
 import { YooKassaAdapter } from './yookassa.adapter.js';
 
 @Module({
   imports: [AuthModule, IdempotencyModule, SubscriptionsModule],
-  controllers: [GenerationPacksController],
+  controllers: [GenerationPacksController, PaymentsController, YooKassaWebhookController],
   providers: [
     PurchaseService,
     WalletService,
     RevisionAllowanceService,
     GenerationFundingService,
     YooKassaAdapter,
+    PaymentsService,
   ],
   exports: [PurchaseService, WalletService, RevisionAllowanceService, GenerationFundingService],
 })

@@ -23,7 +23,7 @@
     "test:watch": "vitest --config vitest.config.ts",
     "test:coverage": "vitest run --coverage --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "openapi:lint": "redocly lint docs/openapi/openapi.yaml",
+    "openapi:lint": "redocly lint docs/openapi/openapi.yaml docs/openapi/billing.openapi.json",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
@@ -36,7 +36,10 @@
     "ci:quality": "bash scripts/ci/quality.sh",
     "ci:integration": "bash scripts/ci/integration.sh",
     "verify": "bash scripts/ci/verify-local.sh",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "payments:reconcile": "node dist/payment-reconcile.js",
+    "openapi:billing:generate": "tsx scripts/export-billing-openapi.mjs",
+    "openapi:billing:check": "tsx scripts/export-billing-openapi.mjs --check"
   },
   "dependencies": {
     "@nestjs/bullmq": "12.0.0",

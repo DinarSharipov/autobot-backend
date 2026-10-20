@@ -76,6 +76,19 @@ const environmentSchema = z
     YOOKASSA_SECRET_KEY: optionalNonEmptyString,
     YOOKASSA_API_BASE_URL: z.url().default('https://api.yookassa.ru/v3'),
     YOOKASSA_RETURN_URL: optionalUrl,
+    YOOKASSA_TEST_CHECKOUT_ENABLED: environmentBoolean.default(false),
+    YOOKASSA_WEBHOOK_ENABLED: environmentBoolean.default(false),
+    YOOKASSA_TEST_USER_IDS: z
+      .string()
+      .default('')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(z.uuid())),
+    YOOKASSA_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(60_000).default(10_000),
     GPTUNNEL_IMAGE_PARAMS: z.preprocess(
       (value) => {
         if (value === undefined || value === '') return {};
@@ -143,6 +156,49 @@ const environmentSchema = z
     PUBLICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   })
   .superRefine((environment, context) => {
+    if (environment.YOOKASSA_TEST_CHECKOUT_ENABLED) {
+      if (environment.YOOKASSA_TEST_USER_IDS.length === 0) {
+        context.addIssue({
+          code: 'custom',
+          path: ['YOOKASSA_TEST_USER_IDS'],
+          message: 'must contain an explicit test user allowlist',
+        });
+      }
+      for (const field of [
+        'YOOKASSA_SHOP_ID',
+        'YOOKASSA_SECRET_KEY',
+        'YOOKASSA_RETURN_URL',
+      ] as const) {
+        if (!environment[field]) {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: 'is required for test checkout',
+          });
+        }
+      }
+    }
+    if (
+      environment.NODE_ENV === 'production' &&
+      environment.YOOKASSA_API_BASE_URL !== 'https://api.yookassa.ru/v3'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['YOOKASSA_API_BASE_URL'],
+        message: 'must use the official API in production',
+      });
+    }
+    if (
+      environment.NODE_ENV === 'production' &&
+      environment.YOOKASSA_RETURN_URL &&
+      new URL(environment.YOOKASSA_RETURN_URL).protocol !== 'https:'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['YOOKASSA_RETURN_URL'],
+        message: 'must use HTTPS in production',
+      });
+    }
     if (environment.METRICS_ENABLED && !environment.METRICS_AUTH_TOKEN) {
       context.addIssue({
         code: 'custom',

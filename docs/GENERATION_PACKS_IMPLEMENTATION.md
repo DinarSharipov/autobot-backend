@@ -12,9 +12,14 @@ append-only ledger и транзакционный `WalletService` для idempo
 подписок и monthly quotas остаётся активным.
 
 Создание idempotent purchase order со snapshot пакета и цены также реализовано; заказ остаётся
-`PENDING` и не пополняет кошелёк. Следующий этап — server-controlled каталог и YooKassa checkout:
-интеграция webhook и переключение generation pipeline не должны начинаться до решений из раздела
-«Внешние зависимости».
+`PENDING` и не пополняет кошелёк. Каталог provision-ится повторяемо при миграционном деплое. Production checkout и переключение
+generation pipeline требуют отдельного решения и acceptance.
+
+Тестовый payment lifecycle реализован additive-срезом: создание/проверка платежа, verified webhook,
+атомарный grant/fulfillment и явный reconciler CLI. Checkout и webhook по умолчанию выключены;
+требуются test shop и allowlist. Актуальный контракт, ограничения и rollout описаны в
+[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md). Refund compensation, полный media/revision
+acceptance и production Stars остаются следующими срезами.
 
 ## Что заменить
 
@@ -140,7 +145,7 @@ reference и optimistic version. `PostVersion` остаётся текстовы
 
 ## Канал оплаты
 
-Для тестового checkout подготовлен YooKassa redirect adapter boundary и конфигурация return URL,
+Для тестового checkout реализован YooKassa redirect lifecycle и конфигурация return URL,
 но production checkout выключен. Решение о production-канале (YooKassa redirect или Telegram Stars)
 остаётся `pending decision`: до подтверждения требований Telegram для цифровых услуг нельзя включать
 YooKassa в production. Redirect URL сам по себе не подтверждает платёж и не начисляет кредиты.

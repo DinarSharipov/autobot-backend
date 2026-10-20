@@ -124,9 +124,9 @@ export class WalletService {
     return this.mutate(input, 'release', database);
   }
 
-  async grant(input: CreditGrant): Promise<WalletBalance> {
+  async grant(input: CreditGrant, database?: Prisma.TransactionClient): Promise<WalletBalance> {
     this.assertInput(input);
-    return serializableTransaction(this.prisma, async (transaction) => {
+    const operation = async (transaction: Prisma.TransactionClient) => {
       const wallet = await transaction.generationWallet.upsert({
         where: { userId_creditType: { userId: input.userId, creditType: input.creditType } },
         create: { userId: input.userId, creditType: input.creditType },
@@ -160,7 +160,8 @@ export class WalletService {
         },
       });
       return this.balance(updated);
-    });
+    };
+    return database ? operation(database) : serializableTransaction(this.prisma, operation);
   }
 
   private async mutate(

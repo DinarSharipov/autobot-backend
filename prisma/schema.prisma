@@ -157,6 +157,11 @@ enum PaymentEventStatus {
   PROCESSED
 }
 
+enum CreditFulfillmentStatus {
+  PENDING
+  FULFILLED
+}
+
 enum MediaStatus {
   PENDING
   READY
@@ -490,17 +495,17 @@ model GenerationReservation {
 }
 
 model TextRevisionAllowance {
-  id                String      @id @default(uuid()) @db.Uuid
-  userId            String      @db.Uuid
-  publicationId     String      @unique @db.Uuid
-  includedTotal     Int         @default(3)
-  includedCommitted Int         @default(0)
-  includedReserved  Int         @default(0)
-  version           Int         @default(1)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  user              User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  publication       Publication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  id                String                           @id @default(uuid()) @db.Uuid
+  userId            String                           @db.Uuid
+  publicationId     String                           @unique @db.Uuid
+  includedTotal     Int                              @default(3)
+  includedCommitted Int                              @default(0)
+  includedReserved  Int                              @default(0)
+  version           Int                              @default(1)
+  createdAt         DateTime                         @default(now())
+  updatedAt         DateTime                         @updatedAt
+  user              User                             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  publication       Publication                      @relation(fields: [publicationId], references: [id], onDelete: Restrict)
   operations        TextRevisionAllowanceOperation[]
 
   @@index([userId, createdAt])
@@ -535,27 +540,32 @@ model GenerationPack {
 }
 
 model PurchaseOrder {
-  id              String              @id @default(uuid()) @db.Uuid
-  userId          String              @db.Uuid
-  packId          String              @db.Uuid
-  idempotencyKey  String
-  status          PurchaseOrderStatus @default(PENDING)
-  creditType      CreditType
-  units           Int
-  priceMinor      Int
-  currency        String
-  packVersion     Int
-  provider        String?
-  providerOrderId String?             @unique
-  paymentUrl      String?
-  expiresAt       DateTime?
-  paidAt          DateTime?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  user            User                @relation(fields: [userId], references: [id], onDelete: Restrict)
-  pack            GenerationPack      @relation(fields: [packId], references: [id], onDelete: Restrict)
-  paymentEvents   PaymentEvent[]
-  ledgerEntries   CreditLedgerEntry[]
+  id                    String                  @id @default(uuid()) @db.Uuid
+  userId                String                  @db.Uuid
+  packId                String                  @db.Uuid
+  idempotencyKey        String
+  status                PurchaseOrderStatus     @default(PENDING)
+  creditType            CreditType
+  units                 Int
+  priceMinor            Int
+  currency              String
+  packVersion           Int
+  provider              String?
+  paymentIdempotencyKey String?                 @unique @db.Uuid
+  paymentStartedAt      DateTime?
+  paymentReturnUrl      String?
+  fulfillmentStatus     CreditFulfillmentStatus @default(PENDING)
+  fulfilledAt           DateTime?
+  providerOrderId       String?                 @unique
+  paymentUrl            String?
+  expiresAt             DateTime?
+  paidAt                DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pack                  GenerationPack          @relation(fields: [packId], references: [id], onDelete: Restrict)
+  paymentEvents         PaymentEvent[]
+  ledgerEntries         CreditLedgerEntry[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, status, createdAt])

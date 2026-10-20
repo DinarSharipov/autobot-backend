@@ -76,22 +76,26 @@ The bot repository receives the matching key ID/secret through its own secret st
 
 ## AI providers
 
-| Variable                      | Required      | Secret | Purpose                                                                    |
-| ----------------------------- | ------------- | ------ | -------------------------------------------------------------------------- |
-| `GPTUNNEL_API_KEY`            | AI generation | yes    | GPTunnel credential; sent as the raw Authorization value                   |
-| `GPTUNNEL_USE_WALLET_BALANCE` | no            | no     | Personal-wallet billing for text; defaults to false; not sent to media API |
-| `PREPAID_GENERATION_ENABLED`  | no            | no     | Enables the prepaid write path after bot migration; defaults to false      |
-| `AI_TEXT_MODEL`               | no            | no     | Chat model ID from `/v1/models`; default `gpt-4o-mini`                     |
-| `AI_IMAGE_MODEL`              | no            | no     | IMAGE model ID from `/api/v2/media/models`; default `gpt-image`            |
-| `GPTUNNEL_IMAGE_PARAMS`       | no            | no     | JSON object of model-specific primitive parameters; default `{}`           |
-| `AI_TEXT_MAX_TOKENS`          | no            | no     | Text response token budget; default 4096                                   |
-| `AI_REQUEST_TIMEOUT_MS`       | no            | no     | Timeout for each provider HTTP request and image download; default 30000   |
-| `AI_IMAGE_TIMEOUT_MS`         | no            | no     | Overall image catalogue/create/poll/download deadline; default 180000      |
-| `AI_IMAGE_POLL_INTERVAL_MS`   | no            | no     | Asynchronous poll interval; default 2000                                   |
-| `YOOKASSA_SHOP_ID`            | production    | yes    | YooKassa shop identifier; retained only in the backend runtime             |
-| `YOOKASSA_SECRET_KEY`         | production    | yes    | YooKassa API key; retained only in the backend runtime                     |
-| `YOOKASSA_API_BASE_URL`       | payment test  | no     | YooKassa v3 endpoint; defaults to the official API URL                     |
-| `YOOKASSA_RETURN_URL`         | payment test  | no     | Backend-controlled redirect return URL; redirect never confirms payment    |
+| Variable                         | Required      | Secret | Purpose                                                                             |
+| -------------------------------- | ------------- | ------ | ----------------------------------------------------------------------------------- |
+| `GPTUNNEL_API_KEY`               | AI generation | yes    | GPTunnel credential; sent as the raw Authorization value                            |
+| `GPTUNNEL_USE_WALLET_BALANCE`    | no            | no     | Personal-wallet billing for text; defaults to false; not sent to media API          |
+| `PREPAID_GENERATION_ENABLED`     | no            | no     | Enables the prepaid write path after bot migration; defaults to false               |
+| `AI_TEXT_MODEL`                  | no            | no     | Chat model ID from `/v1/models`; default `gpt-4o-mini`                              |
+| `AI_IMAGE_MODEL`                 | no            | no     | IMAGE model ID from `/api/v2/media/models`; default `gpt-image`                     |
+| `GPTUNNEL_IMAGE_PARAMS`          | no            | no     | JSON object of model-specific primitive parameters; default `{}`                    |
+| `AI_TEXT_MAX_TOKENS`             | no            | no     | Text response token budget; default 4096                                            |
+| `AI_REQUEST_TIMEOUT_MS`          | no            | no     | Timeout for each provider HTTP request and image download; default 30000            |
+| `AI_IMAGE_TIMEOUT_MS`            | no            | no     | Overall image catalogue/create/poll/download deadline; default 180000               |
+| `AI_IMAGE_POLL_INTERVAL_MS`      | no            | no     | Asynchronous poll interval; default 2000                                            |
+| `YOOKASSA_SHOP_ID`               | production    | yes    | YooKassa shop identifier; retained only in the backend runtime                      |
+| `YOOKASSA_SECRET_KEY`            | production    | yes    | YooKassa API key; retained only in the backend runtime                              |
+| `YOOKASSA_API_BASE_URL`          | payment test  | no     | YooKassa v3 endpoint; defaults to the official API URL                              |
+| `YOOKASSA_RETURN_URL`            | payment test  | no     | Backend-controlled redirect return URL; redirect never confirms payment             |
+| `YOOKASSA_TEST_CHECKOUT_ENABLED` | test checkout | no     | Defaults false; permits only test payments for the explicit allowlist               |
+| `YOOKASSA_TEST_USER_IDS`         | test checkout | no     | Comma-separated backend user UUID allowlist; required when test checkout is enabled |
+| `YOOKASSA_WEBHOOK_ENABLED`       | test checkout | no     | Defaults false; enables the receiver while still requiring server verification      |
+| `YOOKASSA_REQUEST_TIMEOUT_MS`    | optional      | no     | Provider request timeout; 100–60000 ms, default 10000                               |
 
 `OPEN_API_KEY` is retired. Configure a GPTunnel key explicitly; no credential fallback or direct
 OpenAI requests remain. Model availability and supported parameters are account-specific; verify

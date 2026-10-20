@@ -1,0 +1,2609 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autobot billing contract",
+    "version": "1.0.0",
+    "description": "Additive v1 bot contract. Test-only checkout is disabled by default. Browser mutations require CSRF; bot requests require HMAC companion headers from ADR 0003."
+  },
+  "servers": [{ "url": "http://autobot-api:3000/api/v1", "description": "Internal bot boundary" }],
+  "tags": [{ "name": "Billing", "description": "Owned prepaid wallets and test checkout" }],
+  "security": [{ "cookieSession": [] }, { "botSignature": [] }],
+  "paths": {
+    "/generation-packs": {
+      "get": {
+        "operationId": "listGenerationPacks",
+        "summary": "List server-controlled pack prices in minor units",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "creditType",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["TEXT", "IMAGE"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "code",
+                          "creditType",
+                          "units",
+                          "priceMinor",
+                          "currency",
+                          "version"
+                        ],
+                        "properties": {
+                          "code": { "type": "string", "example": "text-20" },
+                          "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                          "units": { "type": "integer", "example": 20 },
+                          "priceMinor": { "type": "integer", "example": 9900 },
+                          "currency": { "type": "string", "example": "RUB" },
+                          "version": { "type": "integer", "example": 1 }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallets": {
+      "get": {
+        "operationId": "getWallets",
+        "summary": "Get balances and ensure the idempotent onboarding gift",
+        "tags": ["Billing"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["creditType", "available", "reserved", "version"],
+                        "properties": {
+                          "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                          "available": { "type": "integer", "example": 3 },
+                          "reserved": { "type": "integer", "example": 0 },
+                          "version": { "type": "integer", "example": 1 }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallets/ledger": {
+      "get": {
+        "operationId": "listWalletLedger",
+        "summary": "List latest owned ledger entries",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "creditType",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["TEXT", "IMAGE"] }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["kind", "units", "operationKey", "createdAt", "wallet"],
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "GIFT",
+                              "PURCHASE",
+                              "RESERVE",
+                              "COMMIT",
+                              "RELEASE",
+                              "REFUND",
+                              "ADJUSTMENT"
+                            ]
+                          },
+                          "units": { "type": "integer" },
+                          "operationKey": { "type": "string" },
+                          "publicationId": { "type": ["string", "null"], "format": "uuid" },
+                          "purchaseOrderId": { "type": ["string", "null"], "format": "uuid" },
+                          "createdAt": { "type": "string", "format": "date-time" },
+                          "wallet": {
+                            "type": "object",
+                            "required": ["creditType"],
+                            "properties": {
+                              "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/purchase-orders": {
+      "get": {
+        "operationId": "listPurchaseOrders",
+        "summary": "List latest 100 owned orders",
+        "tags": ["Billing"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "packCode",
+                          "creditType",
+                          "units",
+                          "priceMinor",
+                          "currency",
+                          "packVersion",
+                          "status",
+                          "paymentStatus",
+                          "fulfillmentStatus",
+                          "fulfilledAt",
+                          "providerPaymentId",
+                          "confirmationUrl",
+                          "paymentUrl",
+                          "expiresAt",
+                          "paidAt",
+                          "createdAt"
+                        ],
+                        "properties": {
+                          "id": { "type": "string", "format": "uuid" },
+                          "packCode": { "type": "string", "example": "text-20" },
+                          "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                          "units": { "type": "integer", "example": 20 },
+                          "priceMinor": { "type": "integer", "example": 9900 },
+                          "currency": { "type": "string", "example": "RUB" },
+                          "packVersion": { "type": "integer", "example": 1 },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "PENDING",
+                              "AWAITING_PAYMENT",
+                              "PAID",
+                              "CANCELLED",
+                              "EXPIRED",
+                              "FAILED"
+                            ]
+                          },
+                          "paymentStatus": {
+                            "type": "string",
+                            "enum": [
+                              "NOT_CREATED",
+                              "PENDING",
+                              "SUCCEEDED",
+                              "CANCELLED",
+                              "EXPIRED",
+                              "FAILED"
+                            ]
+                          },
+                          "fulfillmentStatus": {
+                            "type": "string",
+                            "enum": ["PENDING", "FULFILLED"]
+                          },
+                          "fulfilledAt": { "type": ["string", "null"], "format": "date-time" },
+                          "providerPaymentId": { "type": ["string", "null"], "format": "uuid" },
+                          "confirmationUrl": { "type": ["string", "null"], "format": "uri" },
+                          "paymentUrl": {
+                            "type": ["string", "null"],
+                            "format": "uri",
+                            "deprecated": true,
+                            "description": "Alias of confirmationUrl retained for compatibility."
+                          },
+                          "expiresAt": {
+                            "type": ["string", "null"],
+                            "format": "date-time",
+                            "description": "Null if the provider did not supply an expiry; do not invent a deadline."
+                          },
+                          "paidAt": { "type": ["string", "null"], "format": "date-time" },
+                          "createdAt": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPurchaseOrder",
+        "summary": "Create an idempotent order with immutable server price snapshot",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 16, "maxLength": 128 }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "packCode",
+                        "creditType",
+                        "units",
+                        "priceMinor",
+                        "currency",
+                        "packVersion",
+                        "status",
+                        "paymentStatus",
+                        "fulfillmentStatus",
+                        "fulfilledAt",
+                        "providerPaymentId",
+                        "confirmationUrl",
+                        "paymentUrl",
+                        "expiresAt",
+                        "paidAt",
+                        "createdAt"
+                      ],
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "packCode": { "type": "string", "example": "text-20" },
+                        "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                        "units": { "type": "integer", "example": 20 },
+                        "priceMinor": { "type": "integer", "example": 9900 },
+                        "currency": { "type": "string", "example": "RUB" },
+                        "packVersion": { "type": "integer", "example": 1 },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "AWAITING_PAYMENT",
+                            "PAID",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "paymentStatus": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_CREATED",
+                            "PENDING",
+                            "SUCCEEDED",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "fulfillmentStatus": { "type": "string", "enum": ["PENDING", "FULFILLED"] },
+                        "fulfilledAt": { "type": ["string", "null"], "format": "date-time" },
+                        "providerPaymentId": { "type": ["string", "null"], "format": "uuid" },
+                        "confirmationUrl": { "type": ["string", "null"], "format": "uri" },
+                        "paymentUrl": {
+                          "type": ["string", "null"],
+                          "format": "uri",
+                          "deprecated": true,
+                          "description": "Alias of confirmationUrl retained for compatibility."
+                        },
+                        "expiresAt": {
+                          "type": ["string", "null"],
+                          "format": "date-time",
+                          "description": "Null if the provider did not supply an expiry; do not invent a deadline."
+                        },
+                        "paidAt": { "type": ["string", "null"], "format": "date-time" },
+                        "createdAt": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["packCode"],
+                "additionalProperties": false,
+                "properties": {
+                  "packCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "example": "text-20"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/purchase-orders/{orderId}": {
+      "get": {
+        "operationId": "getPurchaseOrder",
+        "summary": "Get an owned order; redirect never confirms payment",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "packCode",
+                        "creditType",
+                        "units",
+                        "priceMinor",
+                        "currency",
+                        "packVersion",
+                        "status",
+                        "paymentStatus",
+                        "fulfillmentStatus",
+                        "fulfilledAt",
+                        "providerPaymentId",
+                        "confirmationUrl",
+                        "paymentUrl",
+                        "expiresAt",
+                        "paidAt",
+                        "createdAt"
+                      ],
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "packCode": { "type": "string", "example": "text-20" },
+                        "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                        "units": { "type": "integer", "example": 20 },
+                        "priceMinor": { "type": "integer", "example": 9900 },
+                        "currency": { "type": "string", "example": "RUB" },
+                        "packVersion": { "type": "integer", "example": 1 },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "AWAITING_PAYMENT",
+                            "PAID",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "paymentStatus": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_CREATED",
+                            "PENDING",
+                            "SUCCEEDED",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "fulfillmentStatus": { "type": "string", "enum": ["PENDING", "FULFILLED"] },
+                        "fulfilledAt": { "type": ["string", "null"], "format": "date-time" },
+                        "providerPaymentId": { "type": ["string", "null"], "format": "uuid" },
+                        "confirmationUrl": { "type": ["string", "null"], "format": "uri" },
+                        "paymentUrl": {
+                          "type": ["string", "null"],
+                          "format": "uri",
+                          "deprecated": true,
+                          "description": "Alias of confirmationUrl retained for compatibility."
+                        },
+                        "expiresAt": {
+                          "type": ["string", "null"],
+                          "format": "date-time",
+                          "description": "Null if the provider did not supply an expiry; do not invent a deadline."
+                        },
+                        "paidAt": { "type": ["string", "null"], "format": "date-time" },
+                        "createdAt": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/purchase-orders/{orderId}/payment": {
+      "post": {
+        "operationId": "createOrderPayment",
+        "summary": "Create or recover test payment; replay is keyed by the order",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "packCode",
+                        "creditType",
+                        "units",
+                        "priceMinor",
+                        "currency",
+                        "packVersion",
+                        "status",
+                        "paymentStatus",
+                        "fulfillmentStatus",
+                        "fulfilledAt",
+                        "providerPaymentId",
+                        "confirmationUrl",
+                        "paymentUrl",
+                        "expiresAt",
+                        "paidAt",
+                        "createdAt"
+                      ],
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "packCode": { "type": "string", "example": "text-20" },
+                        "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                        "units": { "type": "integer", "example": 20 },
+                        "priceMinor": { "type": "integer", "example": 9900 },
+                        "currency": { "type": "string", "example": "RUB" },
+                        "packVersion": { "type": "integer", "example": 1 },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "AWAITING_PAYMENT",
+                            "PAID",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "paymentStatus": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_CREATED",
+                            "PENDING",
+                            "SUCCEEDED",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "fulfillmentStatus": { "type": "string", "enum": ["PENDING", "FULFILLED"] },
+                        "fulfilledAt": { "type": ["string", "null"], "format": "date-time" },
+                        "providerPaymentId": { "type": ["string", "null"], "format": "uuid" },
+                        "confirmationUrl": { "type": ["string", "null"], "format": "uri" },
+                        "paymentUrl": {
+                          "type": ["string", "null"],
+                          "format": "uri",
+                          "deprecated": true,
+                          "description": "Alias of confirmationUrl retained for compatibility."
+                        },
+                        "expiresAt": {
+                          "type": ["string", "null"],
+                          "format": "date-time",
+                          "description": "Null if the provider did not supply an expiry; do not invent a deadline."
+                        },
+                        "paidAt": { "type": ["string", "null"], "format": "date-time" },
+                        "createdAt": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/purchase-orders/{orderId}/payment/check": {
+      "post": {
+        "operationId": "checkOrderPayment",
+        "summary": "Check provider and fulfill a succeeded test payment",
+        "tags": ["Billing"],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "packCode",
+                        "creditType",
+                        "units",
+                        "priceMinor",
+                        "currency",
+                        "packVersion",
+                        "status",
+                        "paymentStatus",
+                        "fulfillmentStatus",
+                        "fulfilledAt",
+                        "providerPaymentId",
+                        "confirmationUrl",
+                        "paymentUrl",
+                        "expiresAt",
+                        "paidAt",
+                        "createdAt"
+                      ],
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "packCode": { "type": "string", "example": "text-20" },
+                        "creditType": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+                        "units": { "type": "integer", "example": 20 },
+                        "priceMinor": { "type": "integer", "example": 9900 },
+                        "currency": { "type": "string", "example": "RUB" },
+                        "packVersion": { "type": "integer", "example": 1 },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "AWAITING_PAYMENT",
+                            "PAID",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "paymentStatus": {
+                          "type": "string",
+                          "enum": [
+                            "NOT_CREATED",
+                            "PENDING",
+                            "SUCCEEDED",
+                            "CANCELLED",
+                            "EXPIRED",
+                            "FAILED"
+                          ]
+                        },
+                        "fulfillmentStatus": { "type": "string", "enum": ["PENDING", "FULFILLED"] },
+                        "fulfilledAt": { "type": ["string", "null"], "format": "date-time" },
+                        "providerPaymentId": { "type": ["string", "null"], "format": "uuid" },
+                        "confirmationUrl": { "type": ["string", "null"], "format": "uri" },
+                        "paymentUrl": {
+                          "type": ["string", "null"],
+                          "format": "uri",
+                          "deprecated": true,
+                          "description": "Alias of confirmationUrl retained for compatibility."
+                        },
+                        "expiresAt": {
+                          "type": ["string", "null"],
+                          "format": "date-time",
+                          "description": "Null if the provider did not supply an expiry; do not invent a deadline."
+                        },
+                        "paidAt": { "type": ["string", "null"], "format": "date-time" },
+                        "createdAt": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/yookassa/webhook": {
+      "post": {
+        "operationId": "yookassaWebhook",
+        "summary": "Untrusted notification; server verification is mandatory",
+        "tags": ["Billing"],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["received"],
+                  "properties": { "received": { "type": "boolean", "example": true } }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request rejected or provider unavailable; inspect error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error"],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": ["code", "message", "details", "requestId"],
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Machine-readable error code; see docs/BILLING_TEST_CHECKOUT.md."
+                        },
+                        "message": { "type": "string" },
+                        "details": { "type": "object", "additionalProperties": true },
+                        "requestId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type", "event", "object"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["notification"] },
+                  "event": {
+                    "type": "string",
+                    "enum": ["payment.succeeded", "payment.canceled", "payment.waiting_for_capture"]
+                  },
+                  "object": {
+                    "type": "object",
+                    "required": ["id"],
+                    "additionalProperties": true,
+                    "properties": { "id": { "type": "string", "format": "uuid" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookieSession": { "type": "apiKey", "in": "cookie", "name": "__Host-autobot_session" },
+      "botSignature": { "type": "apiKey", "in": "header", "name": "X-Autobot-Signature" }
+    }
+  }
+}

@@ -152,4 +152,22 @@ describe('validateEnvironment', () => {
       }),
     ).not.toThrow();
   });
+  it('keeps checkout and webhook disabled and requires explicit test users on enable', () => {
+    const environment = validateEnvironment(validEnvironment);
+    expect(environment.YOOKASSA_TEST_CHECKOUT_ENABLED).toBe(false);
+    expect(environment.YOOKASSA_WEBHOOK_ENABLED).toBe(false);
+    expect(() =>
+      validateEnvironment({ ...validEnvironment, YOOKASSA_TEST_CHECKOUT_ENABLED: 'true' }),
+    ).toThrow('YOOKASSA_TEST_USER_IDS');
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        YOOKASSA_TEST_CHECKOUT_ENABLED: 'true',
+        YOOKASSA_SHOP_ID: 'shop',
+        YOOKASSA_SECRET_KEY: 'test-key',
+        YOOKASSA_RETURN_URL: 'https://example.test/return',
+        YOOKASSA_TEST_USER_IDS: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).not.toThrow();
+  });
 });

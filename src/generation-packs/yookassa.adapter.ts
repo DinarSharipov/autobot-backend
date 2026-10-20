@@ -1,22 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { z } from 'zod';
 
 import type { AppEnvironment } from '../config/environment.js';
 import { ApiHttpException } from '../common/http/api-http.exception.js';
 
-type YooKassaPayment = {
-  id: string;
-  status: string;
-  confirmation?: { type?: string; confirmation_url?: string };
-  expires_at?: string;
-};
+const paymentSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(['pending', 'waiting_for_capture', 'succeeded', 'canceled']),
+  paid: z.boolean(),
+  test: z.boolean(),
+  amount: z.object({ value: z.string().regex(/^\d+\.\d{2}$/), currency: z.string() }),
+  recipient: z.object({ account_id: z.string() }),
+  metadata: z.object({ order_id: z.string().uuid(), payment_attempt_id: z.string().uuid() }),
+  confirmation: z
+    .object({
+      type: z.literal('redirect'),
+      confirmation_url: z.url().refine((value) => new URL(value).protocol === 'https:'),
+    })
+    .optional(),
+  expires_at: z.iso.datetime({ offset: true }).optional(),
+});
 
-export type YooKassaPaymentView = {
-  providerPaymentId: string;
-  status: string;
-  confirmationUrl: string | null;
-  expiresAt: string | null;
-};
+export type YooKassaPayment = z.infer<typeof paymentSchema>;
+
+export function minorAmount(value: number): string {
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`;
+}
 
 @Injectable()
 export class YooKassaAdapter {
@@ -27,52 +37,56 @@ export class YooKassaAdapter {
     currency: string;
     orderId: string;
     idempotencyKey: string;
-  }): Promise<YooKassaPaymentView> {
+    returnUrl: string;
+  }): Promise<YooKassaPayment> {
+    return this.request('/payments', {
+      method: 'POST',
+      headers: { 'idempotence-key': input.idempotencyKey },
+      body: JSON.stringify({
+        amount: { value: minorAmount(input.amountMinor), currency: input.currency },
+        capture: true,
+        confirmation: { type: 'redirect', return_url: input.returnUrl },
+        metadata: { order_id: input.orderId, payment_attempt_id: input.idempotencyKey },
+      }),
+    });
+  }
+
+  getPayment(paymentId: string): Promise<YooKassaPayment> {
+    return this.request(`/payments/${encodeURIComponent(paymentId)}`, { method: 'GET' });
+  }
+
+  private async request(path: string, options: RequestInit): Promise<YooKassaPayment> {
     const shopId = this.config.get('YOOKASSA_SHOP_ID', { infer: true });
     const secretKey = this.config.get('YOOKASSA_SECRET_KEY', { infer: true });
-    const returnUrl = this.config.get('YOOKASSA_RETURN_URL', { infer: true });
-    if (!shopId || !secretKey || !returnUrl) {
-      throw new ApiHttpException(
-        503,
-        'PAYMENT_PROVIDER_NOT_CONFIGURED',
-        'Payment provider is not configured.',
-      );
-    }
-
-    const response = await fetch(
-      `${this.config.get('YOOKASSA_API_BASE_URL', { infer: true })}/payments`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Basic ${Buffer.from(`${shopId}:${secretKey}`).toString('base64')}`,
-          'content-type': 'application/json',
-          'idempotence-key': input.idempotencyKey,
+    if (!shopId || !secretKey) throw this.error('PAYMENT_PROVIDER_NOT_CONFIGURED', 503);
+    try {
+      const response = await fetch(
+        `${this.config.get('YOOKASSA_API_BASE_URL', { infer: true }).replace(/\/$/, '')}${path}`,
+        {
+          ...options,
+          redirect: 'error',
+          signal: AbortSignal.timeout(
+            this.config.get('YOOKASSA_REQUEST_TIMEOUT_MS', { infer: true }),
+          ),
+          headers: {
+            ...options.headers,
+            authorization: `Basic ${Buffer.from(`${shopId}:${secretKey}`).toString('base64')}`,
+            'content-type': 'application/json',
+          },
         },
-        body: JSON.stringify({
-          amount: { value: (input.amountMinor / 100).toFixed(2), currency: input.currency },
-          capture: true,
-          description: `Autobot generation pack ${input.orderId}`,
-          confirmation: { type: 'redirect', return_url: returnUrl },
-          metadata: { order_id: input.orderId },
-        }),
-      },
-    );
-    if (!response.ok) {
-      throw new ApiHttpException(502, 'PAYMENT_PROVIDER_ERROR', 'Payment provider request failed.');
-    }
-    const payment = (await response.json()) as YooKassaPayment;
-    if (!payment.id || payment.confirmation?.type !== 'redirect') {
-      throw new ApiHttpException(
-        502,
-        'PAYMENT_PROVIDER_INVALID_RESPONSE',
-        'Payment provider returned an invalid response.',
       );
+      if (!response.ok) throw this.error('PAYMENT_PROVIDER_UNAVAILABLE', 503);
+      const payment = paymentSchema.safeParse(await response.json());
+      if (!payment.success) throw this.error('PAYMENT_PROVIDER_INVALID_RESPONSE', 502);
+      return payment.data;
+    } catch (error) {
+      if (error instanceof ApiHttpException) throw error;
+      // Never expose fetch errors, provider bodies, headers or configuration.
+      throw this.error('PAYMENT_PROVIDER_UNAVAILABLE', 503);
     }
-    return {
-      providerPaymentId: payment.id,
-      status: payment.status,
-      confirmationUrl: payment.confirmation.confirmation_url ?? null,
-      expiresAt: payment.expires_at ?? null,
-    };
+  }
+
+  private error(code: string, status: number): ApiHttpException {
+    return new ApiHttpException(status, code, 'Payment provider request could not be completed.');
   }
 }

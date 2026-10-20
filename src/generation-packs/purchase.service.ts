@@ -13,6 +13,11 @@ export type PurchaseOrderView = {
   currency: string;
   packVersion: number;
   status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  fulfilledAt: string | null;
+  providerPaymentId: string | null;
+  confirmationUrl: string | null;
   paymentUrl: string | null;
   expiresAt: string | null;
   paidAt: string | null;
@@ -106,6 +111,9 @@ export class PurchaseService {
     priceMinor: number;
     currency: string;
     packVersion: number;
+    fulfillmentStatus?: string;
+    fulfilledAt?: Date | null;
+    providerOrderId?: string | null;
     paymentUrl: string | null;
     expiresAt: Date | null;
     paidAt: Date | null;
@@ -121,6 +129,18 @@ export class PurchaseService {
       currency: order.currency,
       packVersion: order.packVersion,
       status: order.status,
+      paymentStatus:
+        order.status === 'AWAITING_PAYMENT'
+          ? 'PENDING'
+          : order.status === 'PENDING'
+            ? 'NOT_CREATED'
+            : order.status === 'PAID'
+              ? 'SUCCEEDED'
+              : order.status,
+      fulfillmentStatus: order.fulfillmentStatus ?? 'PENDING',
+      fulfilledAt: order.fulfilledAt?.toISOString() ?? null,
+      providerPaymentId: order.providerOrderId ?? null,
+      confirmationUrl: order.paymentUrl,
       paymentUrl: order.paymentUrl,
       expiresAt: order.expiresAt?.toISOString() ?? null,
       paidAt: order.paidAt?.toISOString() ?? null,

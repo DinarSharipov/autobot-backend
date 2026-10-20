@@ -37,6 +37,22 @@ security:
   - cookieSession: []
   - botSignature: []
 paths:
+  /generation-packs:
+    $ref: "./billing.openapi.json#/paths/~1generation-packs"
+  /wallets:
+    $ref: "./billing.openapi.json#/paths/~1wallets"
+  /wallets/ledger:
+    $ref: "./billing.openapi.json#/paths/~1wallets~1ledger"
+  /purchase-orders:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders"
+  /purchase-orders/{orderId}:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}"
+  /purchase-orders/{orderId}/payment:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1payment"
+  /purchase-orders/{orderId}/payment/check:
+    $ref: "./billing.openapi.json#/paths/~1purchase-orders~1{orderId}~1payment~1check"
+  /payments/yookassa/webhook:
+    $ref: "./billing.openapi.json#/paths/~1payments~1yookassa~1webhook"
   /auth/telegram/start:
     get:
       tags: [Auth]
