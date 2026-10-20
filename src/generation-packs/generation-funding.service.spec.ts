@@ -31,7 +31,7 @@ describe('GenerationFundingService', () => {
         userId: 'user-1',
         creditType: CreditType.TEXT,
         units: 1,
-        operationKey: 'publication:publication-1:text-generation:reserve',
+        operationKey: 'publication:publication-1:text-generation',
       }),
       undefined,
     );

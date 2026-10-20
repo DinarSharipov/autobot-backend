@@ -130,14 +130,15 @@ export class GenerationFundingService {
     database?: Prisma.TransactionClient,
     operationBase?: string,
   ) {
-    const operationKey = `${operationBase ?? `publication:${publicationId}:${creditType.toLowerCase()}-generation`}:${action}`;
+    const reservationKey =
+      operationBase ?? `publication:${publicationId}:${creditType.toLowerCase()}-generation`;
     if (this.isPrepaid) {
       return this.wallet[action](
         {
           userId,
           creditType,
           units: 1,
-          operationKey,
+          operationKey: reservationKey,
           publicationId,
           metadata: { publicationId },
         },
@@ -148,7 +149,7 @@ export class GenerationFundingService {
       userId,
       metric: creditType === CreditType.TEXT ? 'TEXT_GENERATION' : 'IMAGE_GENERATION',
       amount: 1,
-      operationKey,
+      operationKey: `${reservationKey}:${action}`,
       metadata: { publicationId },
       ...(database ? { database } : {}),
     } as const;

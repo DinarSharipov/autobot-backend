@@ -6,7 +6,11 @@ import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
-import { TextGenerationAdapter, TextGenerationProviderError } from './text-generation.adapter.js';
+import {
+  TextGenerationAdapter,
+  TextGenerationProviderError,
+  type TextGenerationResult,
+} from './text-generation.adapter.js';
 
 type PublicationDefinition = {
   prompt: string;
@@ -58,8 +62,9 @@ export class GenerationService {
   async generate(publicationId: string, retry = false): Promise<void> {
     const claim = await this.claim(publicationId, retry);
     if (!claim) return;
+    let result: TextGenerationResult;
     try {
-      const result = await this.adapter.generate({
+      result = await this.adapter.generate({
         prompt: claim.prompt,
         topicPromptTemplate: claim.topicPromptTemplate,
         revisionFeedback: claim.revisionFeedback,
@@ -67,14 +72,16 @@ export class GenerationService {
         maxCharacters: claim.maxCharacters,
         idempotencyKey: `publication:${claim.publicationId}:text:v${claim.generationSequence}`,
       });
-      await this.succeed(claim, result);
     } catch (error) {
       if (error instanceof TextGenerationProviderError && error.retryable) throw error;
       await this.fail(
         claim,
         error instanceof TextGenerationProviderError ? error.code : 'AI_PROVIDER_UNEXPECTED_ERROR',
       );
+      return;
     }
+    // Persistence errors must reach the queue: releasing here could refund a successful generation.
+    await this.succeed(claim, result);
   }
 
   async failAfterRetries(publicationId: string, code: string): Promise<void> {

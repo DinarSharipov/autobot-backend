@@ -313,6 +313,7 @@ export class WalletService {
       creditType: CreditType;
       units: number;
       status: ReservationStatus;
+      publicationId?: string | null;
       wallet: {
         id: string;
         available: number;
@@ -328,7 +329,8 @@ export class WalletService {
     if (
       reservation.userId !== input.userId ||
       reservation.creditType !== input.creditType ||
-      reservation.units !== input.units
+      reservation.units !== input.units ||
+      (input.publicationId !== undefined && reservation.publicationId !== input.publicationId)
     ) {
       throw new ApiHttpException(
         HttpStatus.CONFLICT,
@@ -336,7 +338,16 @@ export class WalletService {
         'The credit operation key was reused with different parameters.',
       );
     }
-    if (action === 'reserve') return this.balance(reservation.wallet);
+    if (action === 'reserve') {
+      if (reservation.status === ReservationStatus.RELEASED) {
+        throw new ApiHttpException(
+          409,
+          'CREDIT_RESERVATION_ALREADY_SETTLED',
+          'The credit reservation has already been settled.',
+        );
+      }
+      return this.balance(reservation.wallet);
+    }
 
     const targetStatus =
       action === 'commit' ? ReservationStatus.COMMITTED : ReservationStatus.RELEASED;
@@ -372,6 +383,7 @@ export class WalletService {
         units: input.units,
         operationKey: `${input.operationKey}:${action}`,
         reservationId: reservation.id,
+        ...(reservation.publicationId ? { publicationId: reservation.publicationId } : {}),
       },
     });
     return this.balance(wallet);

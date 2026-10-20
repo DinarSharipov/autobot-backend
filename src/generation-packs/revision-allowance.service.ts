@@ -10,12 +10,17 @@ export class RevisionAllowanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   ensure(userId: string, publicationId: string, database?: Prisma.TransactionClient) {
-    const operation = (transaction: Prisma.TransactionClient) =>
-      transaction.textRevisionAllowance.upsert({
-        where: { publicationId },
-        create: { userId, publicationId },
-        update: {},
+    const operation = async (transaction: Prisma.TransactionClient) => {
+      await transaction.textRevisionAllowance.createMany({
+        data: [{ userId, publicationId }],
+        skipDuplicates: true,
       });
+      const allowance = await transaction.textRevisionAllowance.findUniqueOrThrow({
+        where: { publicationId },
+      });
+      if (allowance.userId !== userId) this.reusedKey();
+      return allowance;
+    };
     return database ? operation(database) : serializableTransaction(this.prisma, operation);
   }
 
@@ -25,7 +30,7 @@ export class RevisionAllowanceService {
     operationKey: string,
     database?: Prisma.TransactionClient,
   ) {
-    return this.mutate(userId, publicationId, operationKey, 'reserve', database);
+    return this.mutate(userId, publicationId, operationKey, database);
   }
 
   commit(operationKey: string, database?: Prisma.TransactionClient) {
@@ -40,15 +45,10 @@ export class RevisionAllowanceService {
     userId: string,
     publicationId: string,
     operationKey: string,
-    action: 'reserve',
     database?: Prisma.TransactionClient,
   ) {
     const operation = async (transaction: Prisma.TransactionClient) => {
-      const allowance = await transaction.textRevisionAllowance.upsert({
-        where: { publicationId },
-        create: { userId, publicationId },
-        update: {},
-      });
+      const allowance = await this.ensure(userId, publicationId, transaction);
       const existing = await transaction.textRevisionAllowanceOperation.findUnique({
         where: { operationKey },
       });
@@ -57,33 +57,19 @@ export class RevisionAllowanceService {
         if (existing.status === RevisionAllowanceOperationStatus.RELEASED) this.reusedKey();
         return allowance;
       }
+      if (allowance.includedCommitted + allowance.includedReserved >= allowance.includedTotal) {
+        throw new ApiHttpException(
+          409,
+          'REVISION_ALLOWANCE_EXHAUSTED',
+          'Included text revisions are exhausted.',
+        );
+      }
       const updated = await transaction.textRevisionAllowance.updateMany({
-        where: {
-          id: allowance.id,
-          includedCommitted: { lt: allowance.includedTotal },
-          // The predicate is evaluated with the row lock acquired by UPDATE,
-          // preventing two callers from consuming the last included revision.
-          includedReserved: { lt: allowance.includedTotal },
-        },
+        where: { id: allowance.id, version: allowance.version },
         data: { includedReserved: { increment: 1 }, version: { increment: 1 } },
       });
-      if (!updated.count) {
-        throw new ApiHttpException(
-          HttpStatus.CONFLICT,
-          'REVISION_ALLOWANCE_EXHAUSTED',
-          'Included text revisions are exhausted; paid revision confirmation is required.',
-        );
-      }
-      const current = await transaction.textRevisionAllowance.findUniqueOrThrow({
-        where: { id: allowance.id },
-      });
-      if (current.includedCommitted + current.includedReserved > current.includedTotal) {
-        throw new ApiHttpException(
-          HttpStatus.CONFLICT,
-          'REVISION_ALLOWANCE_EXHAUSTED',
-          'Included text revisions are exhausted; paid revision confirmation is required.',
-        );
-      }
+      if (!updated.count)
+        throw new ApiHttpException(409, 'STALE_COST_CONFIRMATION', 'Revision allowance changed.');
       await transaction.textRevisionAllowanceOperation.create({
         data: {
           allowanceId: allowance.id,
@@ -91,7 +77,7 @@ export class RevisionAllowanceService {
           status: RevisionAllowanceOperationStatus.RESERVED,
         },
       });
-      return allowance;
+      return transaction.textRevisionAllowance.findUniqueOrThrow({ where: { id: allowance.id } });
     };
     return database ? operation(database) : serializableTransaction(this.prisma, operation);
   }
