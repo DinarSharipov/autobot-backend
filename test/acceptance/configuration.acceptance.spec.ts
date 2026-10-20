@@ -35,6 +35,8 @@ describe('Isolated configuration validation processes', () => {
     BOT_SERVICE_ACTIVE_KEY_ID: 'active',
     BOT_SERVICE_ACTIVE_SECRET: 'a'.repeat(32),
     TELEGRAM_BOT_TOKEN: 'fixture-token',
+    YOOKASSA_SHOP_ID: 'fixture-test-shop',
+    YOOKASSA_SECRET_KEY: 'fixture-test-secret',
   };
   it('TC-ENV-006 HTTP API_PUBLIC_URL rejected in production', () =>
     expect(check({ ...prod, API_PUBLIC_URL: 'http://api.example.test' }).ok).toBe(false));

@@ -237,6 +237,7 @@ package.json
 prisma/migrations/20261020090000_test_payment_lifecycle/migration.sql
 prisma/schema.prisma
 scripts/ci/quality.sh
+scripts/ci/integration.sh
 scripts/ci/render-production-env.mjs
 scripts/export-billing-openapi.mjs
 src/common/database/serializable-transaction.spec.ts
@@ -255,5 +256,6 @@ src/generation-packs/yookassa.adapter.spec.ts
 src/generation-packs/yookassa.adapter.ts
 src/payment-reconcile.ts
 test/payments.integration.spec.ts
+test/acceptance/configuration.acceptance.spec.ts
 test/setup-env.ts
 ```
