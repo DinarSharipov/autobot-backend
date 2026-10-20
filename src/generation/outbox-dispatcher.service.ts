@@ -50,7 +50,7 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
       });
       const events = await this.prisma.outboxEvent.findMany({
         where: {
-          status: { in: ['PENDING', 'PUBLISHED'] },
+          status: 'PENDING',
           availableAt: { lte: new Date() },
           eventType: 'publication.generation.requested.v1',
         },
@@ -58,6 +58,17 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
         take: 50,
       });
       for (const event of events) await this.dispatch(event.id);
+      // Reconciliation has its own bounded batch so history cannot starve new/resumed work.
+      const published = await this.prisma.outboxEvent.findMany({
+        where: {
+          status: 'PUBLISHED',
+          availableAt: { lte: new Date() },
+          eventType: 'publication.generation.requested.v1',
+        },
+        orderBy: [{ availableAt: 'asc' }, { createdAt: 'asc' }],
+        take: 50,
+      });
+      for (const event of published) await this.dispatch(event.id);
     } catch (error) {
       this.logger.warn({
         event: 'outbox_poll_failed',
@@ -73,6 +84,11 @@ export class OutboxDispatcherService implements OnModuleInit, OnModuleDestroy {
     if (!current) return;
     if (current.status === 'PUBLISHED') {
       await this.reconcilePublished(current);
+      // Rotate checked events: later published events must also get recovery checks.
+      await this.prisma.outboxEvent.updateMany({
+        where: { id: current.id, status: 'PUBLISHED' },
+        data: { availableAt: new Date() },
+      });
       return;
     }
     const claimed = await this.prisma.outboxEvent.updateMany({

@@ -821,4 +821,43 @@ describe('prepaid funding reservations through PostgreSQL', () => {
       await client.end();
     }
   });
+  it('dispatches a new resume event even when an old published batch is full', async () => {
+    const { OutboxDispatcherService } =
+      await import('../src/generation/outbox-dispatcher.service.js');
+    const queue = { getJob: vi.fn().mockResolvedValue({ id: 'existing-job' }), add: vi.fn() };
+    const dispatcher = new OutboxDispatcherService(prisma, app.get(ConfigService), queue as never);
+    await prisma.outboxEvent.createMany({
+      data: Array.from({ length: 50 }, () => ({
+        aggregateType: 'Publication',
+        aggregateId: publicationId,
+        eventType: 'publication.generation.requested.v1',
+        status: 'PUBLISHED' as const,
+        payload: { schemaVersion: 1, publicationId },
+        createdAt: new Date(0),
+        availableAt: new Date(0),
+      })),
+    });
+    const fresh = await prisma.outboxEvent.create({
+      data: {
+        aggregateType: 'Publication',
+        aggregateId: publicationId,
+        eventType: 'publication.generation.requested.v1',
+        payload: { schemaVersion: 1, publicationId },
+      },
+    });
+    await dispatcher.dispatchPending();
+    expect(queue.add).toHaveBeenCalledWith(
+      'generate-post',
+      { schemaVersion: 1, publicationId },
+      expect.objectContaining({ jobId: `generation-${fresh.id}` }),
+    );
+    expect(await prisma.outboxEvent.findUniqueOrThrow({ where: { id: fresh.id } })).toMatchObject({
+      status: 'PUBLISHED',
+    });
+    expect(
+      await prisma.outboxEvent.count({
+        where: { status: 'PUBLISHED', createdAt: new Date(0), availableAt: { gt: new Date(0) } },
+      }),
+    ).toBe(50);
+  });
 });

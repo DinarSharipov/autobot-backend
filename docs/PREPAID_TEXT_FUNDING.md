@@ -26,7 +26,9 @@ spend again. Invalid empty/oversized generated text is treated as terminal gener
 
 On insufficient TEXT credits or refund debt, generation becomes `status=PENDING`,
 `fundingStatus=BLOCKED_FUNDS`, `errorCode=INSUFFICIENT_TEXT_CREDITS`. No provider attempt is created.
-Published-outbox reconciliation skips this state. Top-up does not silently resume work: the user
+Published-outbox reconciliation skips this state. New events have a separate dispatch batch so
+historical published events cannot starve resume; checked events move to the end of the recovery
+scan without delaying recovery of a lost Redis job. Top-up does not silently resume work: the user
 must request resume. Resume preserves the publication, schedule occurrence and approved paid
 intent; it adds one outbox event transactionally. A second resume with the same idempotency key
 returns the original result. Use a new key for a later explicit retry.
