@@ -42,7 +42,8 @@ A text revision retains existing previews but marks their source outdated. It do
 image. Selecting old-source media requires `keepOutdated=true`, bound through If-Match to the
 current publication version; the selected media records the newly approved text version. While
 an image is in flight, its source remains fixed; it may finish as an outdated preview after a text
-revision. Stale callbacks cannot select for a newer text silently.
+revision. Stale callbacks cannot select for a newer text silently. Moderation approval and channel delivery
+claim also advance the publication version, invalidating older preview callbacks and cost quotes.
 
 ## Failure and recovery
 

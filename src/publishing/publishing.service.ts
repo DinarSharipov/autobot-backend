@@ -129,7 +129,11 @@ export class PublishingService {
           { status: PublicationStatus.RETRY_WAIT, nextAttemptAt: { lte: now } },
         ],
       },
-      data: { status: PublicationStatus.PUBLISHING, attemptCount: { increment: 1 } },
+      data: {
+        status: PublicationStatus.PUBLISHING,
+        attemptCount: { increment: 1 },
+        version: { increment: 1 },
+      },
     });
     if (!claimed.count) return;
 

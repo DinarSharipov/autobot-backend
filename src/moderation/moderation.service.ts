@@ -117,7 +117,11 @@ export class ModerationService {
         });
         const publication = await transaction.publication.update({
           where: { id: request.publicationId },
-          data: { status: 'READY', selectedVersionId: request.versionId },
+          data: {
+            status: 'READY',
+            selectedVersionId: request.versionId,
+            version: { increment: 1 },
+          },
         });
         await this.audit(transaction, userId, request.id, 'moderation.approved', {
           publicationId: request.publicationId,
@@ -159,7 +163,7 @@ export class ModerationService {
         });
         const publication = await transaction.publication.update({
           where: { id: request.publicationId },
-          data: { status: 'CANCELLED' },
+          data: { status: 'CANCELLED', version: { increment: 1 } },
         });
         if (
           request.publication.fundingMode === 'LEGACY' &&

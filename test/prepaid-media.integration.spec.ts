@@ -775,4 +775,44 @@ describe('prepaid media generation, preview, selection and delivery', () => {
       });
     },
   );
+  it('invalidates preview callbacks and quotes when moderation approves the selected content', async () => {
+    const selectedImage = await selected();
+    const next = await replacement();
+    await media.process(next.id);
+    const oldVersion = (await pub()).version;
+    const oldQuote = await media.preview(userId, publicationId);
+    await approve();
+    await expect(
+      media.select(userId, publicationId, next.id, oldVersion, false, randomUUID()),
+    ).rejects.toMatchObject({ response: { code: 'STALE_RESOURCE_VERSION' } });
+    await expect(
+      media.request(
+        userId,
+        publicationId,
+        (await pub()).version,
+        oldQuote.costConfirmationId,
+        randomUUID(),
+      ),
+    ).rejects.toMatchObject({ response: { code: 'STALE_COST_CONFIRMATION' } });
+    expect((await pub()).selectedMediaId).toBe(selectedImage.id);
+  });
+  it('invalidates an old READY cost quote when channel delivery has started', async () => {
+    const row = await initial('AUTO');
+    await media.process(row.id);
+    const quote = await media.preview(userId, publicationId);
+    telegram.sendPhotoByFileId.mockRejectedValueOnce(
+      new TelegramPublicationError('MEDIA_UNAVAILABLE', false, false),
+    );
+    await app.get(PublishingService).publish(publicationId);
+    await expect(
+      media.request(
+        userId,
+        publicationId,
+        (await pub()).version,
+        quote.costConfirmationId,
+        randomUUID(),
+      ),
+    ).rejects.toMatchObject({ response: { code: 'STALE_COST_CONFIRMATION' } });
+    expect(images.generate).toHaveBeenCalledTimes(1);
+  });
 });
