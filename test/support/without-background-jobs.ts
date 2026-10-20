@@ -8,6 +8,10 @@ import {
   PublicationDispatcherService,
   PublicationProcessor,
 } from '../../src/publishing/publishing-dispatcher.service.js';
+import {
+  PublicationMediaDispatcher,
+  PublicationMediaProcessor,
+} from '../../src/publishing/publication-media-dispatcher.service.js';
 import { SchedulerService } from '../../src/schedules/scheduler.service.js';
 
 // These suites drive services explicitly. Background consumers would race their
@@ -15,6 +19,8 @@ import { SchedulerService } from '../../src/schedules/scheduler.service.js';
 export function withoutBackgroundJobs(builder: TestingModuleBuilder): TestingModuleBuilder {
   for (const provider of [
     SchedulerService,
+    PublicationMediaDispatcher,
+    PublicationMediaProcessor,
     OutboxDispatcherService,
     PublicationDispatcherService,
     PostGenerationProcessor,

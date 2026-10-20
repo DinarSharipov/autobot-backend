@@ -544,6 +544,16 @@ paths:
           $ref: "#/components/responses/PublicationResponse"
         "409":
           $ref: "#/components/responses/Conflict"
+  /publications/{publicationId}/media:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1media'
+  /publications/{publicationId}/media/cost-preview:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1media~1cost-preview'
+  /publications/{publicationId}/media/{mediaId}/select:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1media~1{mediaId}~1select'
+  /publications/{publicationId}/media/{mediaId}/reject:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1media~1{mediaId}~1reject'
+  /publications/{publicationId}/media/{mediaId}/resume:
+    $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1media~1{mediaId}~1resume'
   /publications/{publicationId}/generation-cost-preview:
     $ref: './billing.openapi.json#/paths/~1publications~1{publicationId}~1generation-cost-preview'
   /publications/{publicationId}/generation/resume:
@@ -1331,7 +1341,7 @@ components:
         page: { $ref: "#/components/schemas/PageInfo" }
     PublicationStatus:
       type: string
-      enum: [PENDING, GENERATING, AWAITING_MODERATION, READY, PUBLISHING, RETRY_WAIT, PUBLISHED, DELIVERY_UNKNOWN, FAILED, CANCELLED, SKIPPED]
+      enum: [PENDING, GENERATING, AWAITING_MEDIA, AWAITING_MODERATION, READY, PUBLISHING, RETRY_WAIT, PUBLISHED, DELIVERY_UNKNOWN, FAILED, CANCELLED, SKIPPED]
     Publication:
       type: object
       additionalProperties: false
@@ -1341,6 +1351,7 @@ components:
         postId: { type: string, format: uuid }
         scheduleId: { type: [string, "null"], format: uuid }
         selectedVersionId: { type: [string, "null"], format: uuid }
+        selectedMediaId: { type: [string, "null"], format: uuid }
         scheduledFor: { type: string, format: date-time }
         status: { $ref: "#/components/schemas/PublicationStatus" }
         fundingMode: { type: string, enum: [LEGACY, PREPAID] }

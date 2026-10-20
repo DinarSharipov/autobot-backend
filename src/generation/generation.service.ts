@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { ApiHttpException } from '../common/http/api-http.exception.js';
+import { mediaImageEnabled } from '../publishing/publication-media.service.js';
 import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
 import { PublicationMode, type TextFundingKind } from '../generated/prisma/client.js';
 import { serializableTransaction } from '../common/database/serializable-transaction.js';
@@ -303,12 +304,12 @@ export class GenerationService {
       if (claim.publicationMode === PublicationMode.AUTO) {
         await transaction.publication.update({
           where: { id: claim.publicationId },
-          data: { status: 'READY', selectedVersionId: claim.versionId },
+          data: { status: 'READY', selectedVersionId: claim.versionId, version: { increment: 1 } },
         });
       } else {
         await transaction.publication.update({
           where: { id: claim.publicationId },
-          data: { status: 'AWAITING_MODERATION' },
+          data: { status: 'AWAITING_MODERATION', version: { increment: 1 } },
         });
       }
       if (claim.publicationMode === PublicationMode.MODERATION) {
@@ -327,6 +328,20 @@ export class GenerationService {
         where: { id: claim.publicationId },
         include: { post: true },
       });
+      if (claim.prepaid && claim.fundingKind === 'INITIAL_TEXT' && mediaImageEnabled(publication)) {
+        await transaction.publicationMedia.create({
+          data: {
+            publicationId: publication.id,
+            sourceVersionId: claim.versionId,
+            generationOperationKey: `publication:${publication.id}:image:initial`,
+          },
+        });
+        if (claim.publicationMode === 'AUTO')
+          await transaction.publication.update({
+            where: { id: publication.id },
+            data: { status: 'AWAITING_MEDIA' },
+          });
+      }
       if (claim.prepaid) {
         await this.prepaidText.settle(
           transaction,

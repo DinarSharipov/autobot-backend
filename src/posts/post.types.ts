@@ -30,6 +30,7 @@ export type PublicationView = {
   postId: string;
   scheduleId: string | null;
   selectedVersionId: string | null;
+  selectedMediaId: string | null;
   scheduledFor: string;
   status: Publication['status'];
   fundingMode: Publication['fundingMode'];
@@ -81,6 +82,7 @@ export function toPublicationView(publication: Publication): PublicationView {
     postId: publication.postId,
     scheduleId: publication.scheduleId,
     selectedVersionId: publication.selectedVersionId,
+    selectedMediaId: publication.selectedMediaId,
     scheduledFor: publication.scheduledFor.toISOString(),
     status: publication.status,
     fundingMode: publication.fundingMode,

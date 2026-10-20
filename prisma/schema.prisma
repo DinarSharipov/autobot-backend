@@ -72,6 +72,7 @@ enum MisfirePolicy {
 }
 
 enum PublicationStatus {
+  AWAITING_MEDIA
   PENDING
   GENERATING
   AWAITING_MODERATION
@@ -168,6 +169,16 @@ enum RefundStatus {
   CANCELLED
 }
 
+enum MediaGenerationStatus {
+  QUEUED
+  RUNNING
+  UPLOADING
+  READY
+  BLOCKED_FUNDS
+  FAILED
+  UPLOAD_UNKNOWN
+}
+
 enum MediaStatus {
   PENDING
   READY
@@ -244,6 +255,7 @@ model User {
   purchaseOrders         PurchaseOrder[]
   paymentEvents          PaymentEvent[]
   costConfirmations      GenerationCostConfirmation[]
+  mediaCostConfirmations MediaCostConfirmation[]
 
   @@index([status])
 }
@@ -381,6 +393,8 @@ model PostVersion {
   aiRequest              AIRequest?         @relation(fields: [aiRequestId], references: [id], onDelete: Restrict)
   moderationRequest      ModerationRequest?
   selectedForPublication Publication?       @relation("SelectedPublicationVersion")
+  generatedMedia         PublicationMedia[] @relation("MediaSourceVersion")
+  approvedMedia          PublicationMedia[] @relation("MediaApprovedText")
 
   @@unique([postId, sequence])
   @@index([publicationId, status])
@@ -449,6 +463,7 @@ model Publication {
   creditLedgerEntries    CreditLedgerEntry[]
   media                  PublicationMedia[]           @relation("PublicationMediaVersions")
   selectedMedia          PublicationMedia?            @relation("SelectedPublicationMedia", fields: [selectedMediaId], references: [id], onDelete: Restrict)
+  mediaCostConfirmations MediaCostConfirmation[]
 
   @@unique([scheduleId, scheduledFor])
   @@unique([telegramChatId, telegramMessageId])
@@ -636,6 +651,17 @@ model PaymentEvent {
 }
 
 model PublicationMedia {
+  generationStatus      MediaGenerationStatus @default(QUEUED)
+  sourceVersionId       String?               @db.Uuid
+  approvedTextVersionId String?               @db.Uuid
+  generationAttempts    Int                   @default(0)
+  nextAttemptAt         DateTime              @default(now())
+  leaseToken            String?               @db.Uuid
+  leaseExpiresAt        DateTime?
+  errorCode             String?
+  sourceVersion         PostVersion?          @relation("MediaSourceVersion", fields: [sourceVersionId], references: [id], onDelete: Restrict)
+  approvedTextVersion   PostVersion?          @relation("MediaApprovedText", fields: [approvedTextVersionId], references: [id], onDelete: Restrict)
+
   id                     String       @id @default(uuid()) @db.Uuid
   publicationId          String       @db.Uuid
   status                 MediaStatus  @default(PENDING)
@@ -651,6 +677,7 @@ model PublicationMedia {
   selectedForPublication Publication? @relation("SelectedPublicationMedia")
 
   @@unique([telegramChatId, telegramMessageId])
+  @@index([generationStatus, nextAttemptAt])
   @@index([publicationId, status, createdAt])
 }
 
@@ -830,6 +857,21 @@ model GenerationCostConfirmation {
   user                User              @relation(fields: [userId], references: [id], onDelete: Restrict)
   publication         Publication       @relation(fields: [publicationId], references: [id], onDelete: Restrict)
   moderationRequest   ModerationRequest @relation(fields: [moderationRequestId], references: [id], onDelete: Restrict)
+
+  @@index([publicationId, createdAt])
+}
+
+model MediaCostConfirmation {
+  id                 String      @id @default(uuid()) @db.Uuid
+  userId             String      @db.Uuid
+  publicationId      String      @db.Uuid
+  publicationVersion Int
+  textVersionId      String      @db.Uuid
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  createdAt          DateTime    @default(now())
+  user               User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  publication        Publication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
 
   @@index([publicationId, createdAt])
 }

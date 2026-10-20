@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { PublicationMediaModule } from './publication-media.module.js';
 import { GptunnelModule } from '../infrastructure/gptunnel/gptunnel.module.js';
 
 import { IdempotencyModule } from '../common/idempotency/idempotency.module.js';
@@ -11,14 +12,8 @@ import {
   PublicationDispatcherService,
   PublicationProcessor,
 } from './publishing-dispatcher.service.js';
-import { GptunnelImageGenerationAdapter } from './gptunnel-image-generation.adapter.js';
 import { PublishingController } from './publishing.controller.js';
 import { PublishingService } from './publishing.service.js';
-import {
-  TelegramBotApiPublicationAdapter,
-  TelegramPublicationAdapter,
-} from './telegram-publication.adapter.js';
-import { ImageGenerationAdapter } from './image-generation.adapter.js';
 
 @Module({
   imports: [
@@ -28,16 +23,9 @@ import { ImageGenerationAdapter } from './image-generation.adapter.js';
     SubscriptionsModule,
     GenerationPacksModule,
     GptunnelModule,
+    PublicationMediaModule,
   ],
   controllers: [PublishingController],
-  providers: [
-    PublishingService,
-    PublicationDispatcherService,
-    PublicationProcessor,
-    TelegramBotApiPublicationAdapter,
-    { provide: TelegramPublicationAdapter, useExisting: TelegramBotApiPublicationAdapter },
-    GptunnelImageGenerationAdapter,
-    { provide: ImageGenerationAdapter, useExisting: GptunnelImageGenerationAdapter },
-  ],
+  providers: [PublishingService, PublicationDispatcherService, PublicationProcessor],
 })
 export class PublishingModule {}

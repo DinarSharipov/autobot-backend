@@ -224,7 +224,7 @@ For the refund policy, debt fields and new refund endpoints see [BILLING_REFUNDS
 | Pending/paid-but-unfulfilled reconciliation                                             | done as explicit bounded CLI; scheduling pending rollout         |
 | Compensating refunds                                                                    | done for verified test refunds; see BILLING_REFUNDS.md           |
 | Prepaid text revision confirmation and BLOCKED_FUNDS/resume                             | implemented behind disabled rollout; see PREPAID_TEXT_FUNDING.md |
-| Image preview/replacement/select and media reuse                                        | pending separate slice                                           |
+| Image preview/replacement/select and media reuse                                        | implemented behind disabled rollout; see PREPAID_MEDIA.md        |
 | Controlled real provider test, production secret presence verification for this release | pending deployment                                               |
 | Production channel/Stars implementation and global prepaid activation                   | pending decision/implementation; disabled                        |
 

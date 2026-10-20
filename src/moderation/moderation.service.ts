@@ -6,6 +6,10 @@ import { decodeCursor, encodeCursor } from '../common/http/pagination.js';
 import { IdempotencyService } from '../common/idempotency/idempotency.service.js';
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import {
+  PublicationMediaService,
+  mediaImageEnabled,
+} from '../publishing/publication-media.service.js';
 import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
 import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import type { ModerationListQuery } from './moderation.dto.js';
@@ -22,6 +26,7 @@ export class ModerationService {
     private readonly usage: UsageService,
     private readonly funding: GenerationFundingService,
     private readonly prepaid: PrepaidTextService,
+    private readonly media: PublicationMediaService,
   ) {}
 
   async list(userId: string, query: ModerationListQuery) {
@@ -67,6 +72,35 @@ export class ModerationService {
       requestHash: this.idempotency.digest({ requestId, version }),
       handler: async (transaction) => {
         const request = await this.pendingRequest(transaction, userId, requestId, version);
+        if (
+          request.publication.fundingMode === 'PREPAID' &&
+          mediaImageEnabled(request.publication)
+        ) {
+          const selected = request.publication.selectedMediaId
+            ? await transaction.publicationMedia.findUnique({
+                where: { id: request.publication.selectedMediaId },
+              })
+            : null;
+          const activeMedia = await transaction.publicationMedia.count({
+            where: {
+              publicationId: request.publicationId,
+              generationStatus: { in: ['QUEUED', 'RUNNING', 'UPLOADING', 'BLOCKED_FUNDS'] },
+            },
+          });
+          if (
+            activeMedia ||
+            !selected ||
+            selected.status !== 'SELECTED' ||
+            selected.generationStatus !== 'READY' ||
+            !selected.telegramFileId ||
+            selected.approvedTextVersionId !== request.versionId
+          )
+            throw new ApiHttpException(
+              409,
+              'MEDIA_UNAVAILABLE',
+              'Select an available image for the current text before approval.',
+            );
+        }
         const now = new Date();
         await transaction.moderationRequest.update({
           where: { id: request.id },
@@ -107,6 +141,8 @@ export class ModerationService {
       requestHash: this.idempotency.digest({ requestId, version }),
       handler: async (transaction) => {
         const request = await this.pendingRequest(transaction, userId, requestId, version);
+        if (request.publication.fundingMode === 'PREPAID')
+          await this.media.cancelPending(transaction, request.publication);
         const now = new Date();
         await transaction.moderationRequest.update({
           where: { id: request.id },

@@ -36,6 +36,7 @@ function connectionFromUrl(value: string): ConnectionOptions {
     BullModule.registerQueue(
       { name: QUEUE_NAMES.postGeneration },
       { name: QUEUE_NAMES.publication },
+      { name: QUEUE_NAMES.media },
       { name: QUEUE_NAMES.scheduling },
       { name: QUEUE_NAMES.outbox },
     ),

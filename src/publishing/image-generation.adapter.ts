@@ -4,7 +4,7 @@ export type ImageGenerationInput = {
   idempotencyKey: string;
 };
 
-export type ImageGenerationResult = { filePath: string };
+export type ImageGenerationResult = { filePath: string; providerRequestId?: string };
 
 export class ImageGenerationProviderError extends Error {
   constructor(

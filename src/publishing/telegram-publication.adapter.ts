@@ -11,6 +11,11 @@ export type TelegramPublicationResult = {
   messageId: bigint;
 };
 
+export type TelegramPhotoResult = TelegramPublicationResult & {
+  fileId: string;
+  fileUniqueId: string;
+};
+
 export class TelegramPublicationError extends Error {
   constructor(
     readonly code: string,
@@ -25,6 +30,18 @@ export class TelegramPublicationError extends Error {
 }
 
 export abstract class TelegramPublicationAdapter {
+  uploadPhoto(_chatId: bigint, _caption: string, _filePath: string): Promise<TelegramPhotoResult> {
+    void [_chatId, _caption, _filePath];
+    return Promise.reject(new TelegramPublicationError('MEDIA_UNAVAILABLE', false, false));
+  }
+  sendPhotoByFileId(
+    _chatId: bigint,
+    _caption: string,
+    _fileId: string,
+  ): Promise<TelegramPublicationResult> {
+    void [_chatId, _caption, _fileId];
+    return Promise.reject(new TelegramPublicationError('MEDIA_UNAVAILABLE', false, false));
+  }
   abstract sendText(chatId: bigint, text: string): Promise<TelegramPublicationResult>;
   abstract sendPhoto(
     chatId: bigint,
@@ -33,7 +50,11 @@ export abstract class TelegramPublicationAdapter {
   ): Promise<TelegramPublicationResult>;
 }
 
-type TelegramMessage = { message_id?: unknown; chat?: { id?: unknown } };
+type TelegramMessage = {
+  message_id?: unknown;
+  chat?: { id?: unknown };
+  photo?: { file_id?: unknown; file_unique_id?: unknown; width?: unknown; height?: unknown }[];
+};
 type TelegramPayload = {
   ok?: boolean;
   result?: TelegramMessage;
@@ -82,11 +103,51 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
     return this.result(response, chatId);
   }
 
+  override async uploadPhoto(
+    chatId: bigint,
+    caption: string,
+    filePath: string,
+  ): Promise<TelegramPhotoResult> {
+    const result = await this.upload(chatId, caption, filePath, true);
+    if (!result.fileId || !result.fileUniqueId)
+      throw new TelegramPublicationError('MEDIA_UNAVAILABLE', false, true);
+    return { ...result, fileId: result.fileId, fileUniqueId: result.fileUniqueId };
+  }
+
+  override async sendPhotoByFileId(
+    chatId: bigint,
+    caption: string,
+    fileId: string,
+  ): Promise<TelegramPublicationResult> {
+    if (!caption.trim() || caption.length > 1024 || !fileId || fileId.length > 2048)
+      throw new TelegramPublicationError('MEDIA_UNAVAILABLE', false, false);
+    try {
+      return await this.result(
+        await this.request('sendPhoto', { chat_id: chatId.toString(), caption, photo: fileId }),
+        chatId,
+      );
+    } catch (error) {
+      if (
+        error instanceof TelegramPublicationError &&
+        error.code === 'TELEGRAM_PUBLICATION_REJECTED' &&
+        /wrong.*file.*id|file_reference_expired|file_id_invalid|wrong remote file/i.test(
+          error.message,
+        )
+      )
+        throw new TelegramPublicationError('MEDIA_UNAVAILABLE', false, false);
+      throw error;
+    }
+  }
+
   async sendPhoto(
     chatId: bigint,
     caption: string,
     filePath: string,
   ): Promise<TelegramPublicationResult> {
+    return this.upload(chatId, caption, filePath, false);
+  }
+
+  private async upload(chatId: bigint, caption: string, filePath: string, requirePhoto: boolean) {
     if (!caption.trim()) {
       throw new TelegramPublicationError(
         'PUBLICATION_TEXT_EMPTY',
@@ -158,10 +219,13 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
         error instanceof Error ? error.message : 'Telegram response was not received.',
       );
     }
-    return this.result(response, chatId);
+    return this.result(response, chatId, requirePhoto);
   }
 
-  private async request(method: 'sendMessage', body: Record<string, string>): Promise<Response> {
+  private async request(
+    method: 'sendMessage' | 'sendPhoto',
+    body: Record<string, string>,
+  ): Promise<Response> {
     const token = this.config.get('TELEGRAM_BOT_TOKEN', { infer: true });
     if (!token) {
       throw new TelegramPublicationError(
@@ -196,7 +260,8 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
   private async result(
     response: Response,
     expectedChatId: bigint,
-  ): Promise<TelegramPublicationResult> {
+    requirePhoto = false,
+  ): Promise<TelegramPublicationResult & { fileId?: string; fileUniqueId?: string }> {
     let payload: TelegramPayload;
     try {
       payload = (await response.json()) as TelegramPayload;
@@ -258,6 +323,28 @@ export class TelegramBotApiPublicationAdapter extends TelegramPublicationAdapter
         undefined,
         'Telegram returned a message for a different chat.',
       );
+    }
+    if (requirePhoto) {
+      const photos = Array.isArray(payload.result?.photo) ? payload.result.photo : [];
+      const photo = photos
+        .filter(
+          (item) =>
+            item !== null &&
+            typeof item === 'object' &&
+            typeof item.file_id === 'string' &&
+            item.file_id.length > 0 &&
+            item.file_id.length <= 2048 &&
+            typeof item.file_unique_id === 'string' &&
+            item.file_unique_id.length > 0,
+        )
+        .at(-1);
+      if (!photo) throw new TelegramPublicationError('MEDIA_UNAVAILABLE', false, true);
+      return {
+        chatId: returnedChatId,
+        messageId,
+        fileId: photo.file_id as string,
+        fileUniqueId: photo.file_unique_id as string,
+      };
     }
     return { chatId: returnedChatId, messageId };
   }

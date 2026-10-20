@@ -1,3 +1,8 @@
+import {
+  mediaSchema,
+  mediaListSchema,
+  mediaCostSchema,
+} from '../src/publishing/publication-media.openapi.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { format, resolveConfig } from 'prettier';
 import {
@@ -69,7 +74,89 @@ const publicationId = {
   required: true,
   schema: { type: 'string', format: 'uuid' },
 };
+const mediaId = {
+  name: 'mediaId',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+};
+const mediaMatch = {
+  name: 'If-Match',
+  in: 'header',
+  required: true,
+  schema: { type: 'string', pattern: '^"[1-9][0-9]*"$', example: '"3"' },
+};
+const mediaIdempotency = {
+  name: 'Idempotency-Key',
+  in: 'header',
+  required: true,
+  schema: { type: 'string', minLength: 16, maxLength: 128 },
+};
+const jsonBody = (schema) => ({ required: true, content: { 'application/json': { schema } } });
 const paths = {
+  '/publications/{publicationId}/media': {
+    get: operation(
+      'listPublicationMedia',
+      'List latest 100 owned preview versions and current selection',
+      billingResponse(mediaListSchema),
+      [publicationId],
+    ),
+    post: {
+      ...operation(
+        'requestPublicationMedia',
+        'Explicitly request one image or replacement costing 1 IMAGE',
+        billingResponse(mediaSchema),
+        [publicationId, mediaMatch, mediaIdempotency],
+        '202',
+      ),
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['costConfirmationId'],
+        additionalProperties: false,
+        properties: { costConfirmationId: { type: 'string', format: 'uuid' } },
+      }),
+    },
+  },
+  '/publications/{publicationId}/media/cost-preview': {
+    post: operation(
+      'previewImageCost',
+      'Issue one-use 1 IMAGE confirmation for the current publication/text (ten minutes)',
+      billingResponse(mediaCostSchema),
+      [publicationId],
+    ),
+  },
+  '/publications/{publicationId}/media/{mediaId}/select': {
+    post: {
+      ...operation(
+        'selectPublicationMedia',
+        'Select preview for current text; explicitly keep outdated source if requested',
+        billingResponse(mediaSchema),
+        [publicationId, mediaId, mediaMatch, mediaIdempotency],
+      ),
+      requestBody: jsonBody({
+        type: 'object',
+        additionalProperties: false,
+        properties: { keepOutdated: { type: 'boolean', default: false } },
+      }),
+    },
+  },
+  '/publications/{publicationId}/media/{mediaId}/reject': {
+    post: operation(
+      'rejectPublicationMedia',
+      'Reject or cancel image without refunding accepted generation',
+      billingResponse(mediaSchema),
+      [publicationId, mediaId, mediaMatch, mediaIdempotency],
+    ),
+  },
+  '/publications/{publicationId}/media/{mediaId}/resume': {
+    post: operation(
+      'resumePublicationMedia',
+      'Resume an approved image operation blocked on IMAGE funds',
+      billingResponse(mediaSchema),
+      [publicationId, mediaId, mediaIdempotency],
+      '202',
+    ),
+  },
   '/publications/{publicationId}/generation-cost-preview': {
     post: operation(
       'previewTextRevisionCost',
@@ -247,7 +334,7 @@ const document = {
   openapi: '3.1.0',
   info: {
     title: 'Autobot billing contract',
-    version: '1.2.0',
+    version: '1.3.0',
     description:
       'Additive v1 bot contract. Test-only checkout is disabled by default. Browser mutations require CSRF; bot requests require HMAC companion headers from ADR 0003.',
   },

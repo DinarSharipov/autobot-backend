@@ -1,6 +1,7 @@
 export const QUEUE_NAMES = {
   postGeneration: 'post-generation',
   publication: 'publication',
+  media: 'publication-media',
   scheduling: 'scheduling',
   outbox: 'outbox',
 } as const;

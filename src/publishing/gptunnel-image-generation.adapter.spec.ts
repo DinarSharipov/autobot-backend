@@ -84,7 +84,8 @@ describe('GPTunnel Creative Lab image generation', () => {
     expect(download[1]).not.toHaveProperty('headers');
     expect(download[1]?.redirect).toBe('error');
     expect(result.filePath).toMatch(/\.png$/);
-    expect(Object.keys(result)).toEqual(['filePath']);
+    expect(Object.keys(result)).toEqual(['filePath', 'providerRequestId']);
+    expect(result.providerRequestId).toBe(id);
     await temporaryImages.remove(result.filePath);
     expect(await readdir(directory)).toEqual([]);
   });

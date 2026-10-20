@@ -1,3 +1,4 @@
+import { PublicationMediaModule } from '../publishing/publication-media.module.js';
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module.js';
@@ -8,7 +9,13 @@ import { ModerationController } from './moderation.controller.js';
 import { ModerationService } from './moderation.service.js';
 
 @Module({
-  imports: [AuthModule, IdempotencyModule, SubscriptionsModule, GenerationPacksModule],
+  imports: [
+    PublicationMediaModule,
+    AuthModule,
+    IdempotencyModule,
+    SubscriptionsModule,
+    GenerationPacksModule,
+  ],
   controllers: [ModerationController],
   providers: [ModerationService],
 })

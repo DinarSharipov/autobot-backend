@@ -10,6 +10,7 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service.js
 import { PrismaService } from '../infrastructure/prisma/prisma.service.js';
 import { ImageTempService } from '../infrastructure/image-temp/image-temp.service.js';
 import { UsageService } from '../subscriptions/usage.service.js';
+import { PublicationMediaService } from './publication-media.service.js';
 import { PrepaidTextService } from '../generation-packs/prepaid-text.service.js';
 import { GenerationFundingService } from '../generation-packs/generation-funding.service.js';
 import { toPublicationView, type PublicationView } from '../posts/post.types.js';
@@ -77,6 +78,7 @@ export class PublishingService {
     private readonly usage: UsageService,
     @Optional() private readonly funding?: GenerationFundingService,
     @Optional() private readonly prepaidText?: PrepaidTextService,
+    @Optional() private readonly media?: PublicationMediaService,
   ) {}
 
   async list(userId: string, query: PublicationListQuery) {
@@ -133,18 +135,20 @@ export class PublishingService {
 
     const publication = await this.prisma.publication.findUnique({
       where: { id: publicationId },
-      include: { selectedVersion: true, post: { include: { channel: true } } },
+      include: { selectedMedia: true, selectedVersion: true, post: { include: { channel: true } } },
     });
     if (!publication) return;
     const definition = definitionOf(publication.definition);
     const generateImage = definition?.generateImage ?? publication.post.generateImage;
-    // Media preview/selection is a separate rollout. Never generate an unapproved prepaid image here.
-    if (publication.fundingMode === 'PREPAID' && generateImage) {
-      await this.fail(
-        publicationId,
-        'MEDIA_UNAVAILABLE',
-        'Prepaid media selection is not available.',
-      );
+    if (
+      publication.fundingMode === 'PREPAID' &&
+      generateImage &&
+      (!publication.selectedMedia?.telegramFileId ||
+        publication.selectedMedia.status !== 'SELECTED' ||
+        publication.selectedMedia.generationStatus !== 'READY' ||
+        publication.selectedMedia.approvedTextVersionId !== publication.selectedVersionId)
+    ) {
+      await this.fail(publicationId, 'MEDIA_UNAVAILABLE', 'Selected image is unavailable.');
       return;
     }
     const chatId = definition
@@ -165,19 +169,26 @@ export class PublishingService {
     let imagePath: string | undefined;
     let imageUsageCommitted = false;
     try {
-      const result = generateImage
-        ? await this.publishWithImage(
-            publication,
-            { prompt, chatId },
-            imageUsageKey,
-            (path) => {
-              imagePath = path;
-            },
-            () => {
-              imageUsageCommitted = true;
-            },
-          )
-        : await this.adapter.sendText(chatId, publication.selectedVersion.text);
+      const result =
+        generateImage && publication.fundingMode === 'PREPAID'
+          ? await this.adapter.sendPhotoByFileId(
+              chatId,
+              publication.selectedVersion.text,
+              publication.selectedMedia!.telegramFileId!,
+            )
+          : generateImage
+            ? await this.publishWithImage(
+                publication,
+                { prompt, chatId },
+                imageUsageKey,
+                (path) => {
+                  imagePath = path;
+                },
+                () => {
+                  imageUsageCommitted = true;
+                },
+              )
+            : await this.adapter.sendText(chatId, publication.selectedVersion.text);
       await this.prisma.publication.updateMany({
         where: { id: publicationId, status: PublicationStatus.PUBLISHING },
         data: {
@@ -192,11 +203,22 @@ export class PublishingService {
         },
       });
     } catch (error) {
+      if (
+        publication.fundingMode === 'PREPAID' &&
+        publication.selectedMediaId &&
+        error instanceof TelegramPublicationError &&
+        error.code === 'MEDIA_UNAVAILABLE'
+      ) {
+        await this.prisma.publicationMedia.update({
+          where: { id: publication.selectedMediaId },
+          data: { status: 'UNAVAILABLE', errorCode: 'MEDIA_UNAVAILABLE' },
+        });
+      }
       await this.handleError(
         publicationId,
         publication.attemptCount,
         error,
-        generateImage && !imageUsageCommitted,
+        publication.fundingMode !== 'PREPAID' && generateImage && !imageUsageCommitted,
       );
     } finally {
       if (imagePath) await this.temporaryImages.remove(imagePath);
@@ -279,7 +301,11 @@ export class PublishingService {
         const retryImageUsageKey = imageUsageCommitted
           ? publication.imageUsageKey
           : `publication:${publication.id}:image-generation:retry:${randomUUID()}`;
-        if (publication.post.generateImage && !imageUsageCommitted) {
+        if (
+          publication.fundingMode !== 'PREPAID' &&
+          publication.post.generateImage &&
+          !imageUsageCommitted
+        ) {
           await this.funding!.reserveImage(
             userId,
             publication.id,
@@ -296,7 +322,9 @@ export class PublishingService {
             nextAttemptAt: null,
             errorCode: null,
             errorDetails: Prisma.JsonNull,
-            ...(publication.post.generateImage && !imageUsageCommitted
+            ...(publication.fundingMode !== 'PREPAID' &&
+            publication.post.generateImage &&
+            !imageUsageCommitted
               ? { imageUsageKey: retryImageUsageKey }
               : {}),
           },
@@ -320,6 +348,7 @@ export class PublishingService {
         if (!publication) this.notFound();
         const cancellable = new Set<PublicationStatus>([
           PublicationStatus.PENDING,
+          PublicationStatus.AWAITING_MEDIA,
           PublicationStatus.AWAITING_MODERATION,
           PublicationStatus.READY,
           PublicationStatus.RETRY_WAIT,
@@ -333,6 +362,8 @@ export class PublishingService {
             'Publication delivery has already started.',
           );
         }
+        if (publication.fundingMode === 'PREPAID')
+          await this.media!.cancelPending(transaction, publication);
         if (publication.status === PublicationStatus.PENDING) {
           if (publication.fundingMode === 'PREPAID')
             await this.prepaidText!.cancelPending(transaction, publication);

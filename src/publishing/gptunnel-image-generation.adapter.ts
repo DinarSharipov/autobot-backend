@@ -132,7 +132,10 @@ export class GptunnelImageGenerationAdapter extends ImageGenerationAdapter {
       const bytes = await this.download(parsed, signal);
       const suffix = extension(bytes);
       try {
-        return { filePath: await this.temporaryImages.createFile(bytes, suffix) };
+        return {
+          filePath: await this.temporaryImages.createFile(bytes, suffix),
+          providerRequestId: taskId,
+        };
       } catch {
         throw new GptunnelError('AI_IMAGE_TEMP_STORAGE_UNAVAILABLE', true);
       }

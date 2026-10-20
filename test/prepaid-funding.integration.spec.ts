@@ -653,14 +653,14 @@ describe('prepaid funding reservations through PostgreSQL', () => {
     expect(adapter.generate).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps prepaid image delivery closed until the media preview slice', async () => {
+  it('waits for prepaid media generation instead of publishing or charging an unselected image', async () => {
     const original = await prisma.publication.findUniqueOrThrow({ where: { id: publicationId } });
     await prisma.post.update({ where: { id: original.postId }, data: { generateImage: true } });
     await generation.generate(publicationId);
     await app.get(PublishingService).publish(publicationId);
     expect(
       await prisma.publication.findUniqueOrThrow({ where: { id: publicationId } }),
-    ).toMatchObject({ status: 'FAILED', errorCode: 'MEDIA_UNAVAILABLE' });
+    ).toMatchObject({ status: 'AWAITING_MEDIA', selectedMediaId: null });
     expect(telegram.sendPhoto).not.toHaveBeenCalled();
     expect(await prisma.generationReservation.count({ where: { creditType: 'IMAGE' } })).toBe(0);
   });

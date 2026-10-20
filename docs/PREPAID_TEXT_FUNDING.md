@@ -34,9 +34,8 @@ intent; it adds one outbox event transactionally. A second resume with the same 
 returns the original result. Use a new key for a later explicit retry.
 
 Cancellation of pending included/paid work releases any active hold. Text delivery remains
-independent of text funding. Until image preview/selection is implemented, prepaid image delivery
-fails closed with `MEDIA_UNAVAILABLE`, without generating an image or reserving IMAGE credits.
-Do not enable prepaid for image posts in this slice.
+independent of text funding. The media stage is implemented separately; see [PREPAID_MEDIA.md](PREPAID_MEDIA.md).
+Prepaid image publication now waits for a selected Telegram reference. Global rollout remains disabled.
 
 ## Bot API contract
 
@@ -99,7 +98,7 @@ Machine-readable errors:
 - `INSUFFICIENT_TEXT_CREDITS`: stored on blocked publications (includes debt).
 - `GENERATION_NOT_RESUMABLE`: work is running, completed, cancelled or otherwise outside resume states.
 - `PREPAID_NOT_APPLICABLE`: preview/resume requested for a legacy publication.
-- `MEDIA_UNAVAILABLE`: prepaid image selection has not been rolled out.
+- `MEDIA_UNAVAILABLE`: no available image has been selected for the current text; see PREPAID_MEDIA.md.
 
 The generated billing contract is version 1.2.0 in `docs/openapi/billing.openapi.json` (schemas
 shared with runtime Swagger). `docs/openapi/openapi.yaml` references the new paths and documents
@@ -130,7 +129,7 @@ acceptance, both deployment image builds and migration-container smoke checks.
 Controlled rollout sequence:
 
 1. Deploy schema and code with all checkout/prepaid flags still false; confirm normal legacy CI.
-2. Complete image preview/replacement/selection/reuse and remaining media acceptance tests.
+2. Validate the implemented media stage and its rollout criteria in PREPAID_MEDIA.md.
 3. Resolve Telegram Stars versus external checkout policy and production payment-channel decision.
 4. On an isolated test deployment, provision catalogue, use a test user and test payment, enable
    prepaid explicitly there, and run initial text → three included revisions → paid confirmation
