@@ -9,6 +9,7 @@ required=(
   GHCR_USER
   GHCR_TOKEN
   PRODUCTION_ENV_FILE
+  PRODUCTION_BOOTSTRAP_ENV_FILE
   YOOKASSA_SHOP_ID
   YOOKASSA_SECRET_KEY
 )
@@ -83,5 +84,9 @@ deploy_root='/opt/autobot/backend'
   "$PRODUCTION_ENV_FILE" \
   "$remote:$deploy_root/.env.yookassa.next"
 
+"${scp_prefix[@]}" scp "${scp_options[@]}" \
+  "$PRODUCTION_BOOTSTRAP_ENV_FILE" \
+  "$remote:$deploy_root/.env.bootstrap.next"
+
 printf '%s\n' "$GHCR_TOKEN" | "${ssh_prefix[@]}" ssh "${ssh_options[@]}" "$remote" \
-  "cd '$deploy_root' && bash ./merge-yookassa-env.sh && GHCR_USER='$GHCR_USER' bash ./backend-deploy.sh"
+  "cd '$deploy_root' && if [ -s .env ]; then rm -f .env.bootstrap.next && bash ./merge-yookassa-env.sh; else rm -f .env.yookassa.next && mv .env.bootstrap.next .env.next && chmod 600 .env.next; fi && GHCR_USER='$GHCR_USER' bash ./backend-deploy.sh"
