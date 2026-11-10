@@ -32,7 +32,7 @@ verifies OpenAPI. The server-side updater remains a recovery path for image upda
 require changing runtime secrets.
 
 Create the `production` environment in `DinarSharipov/autobot-backend`, restrict it to `dev`, and
-optionally set `API_PUBLIC_URL`. The workflow uses the current production URL by default. During a
+set `API_PUBLIC_URL` to the new host's public HTTPS URL. There is no hard-coded URL fallback. During a
 deployment it renders a mode-`0600` YooKassa-only environment fragment, transfers it over SSH,
 merges it into the server environment, and verifies only the presence of the YooKassa variables in
 `autobot-api`.
@@ -143,3 +143,33 @@ OpenAPI document is available.
 - The publishing bot must have the required permissions in target channels.
 - The GHCR package must inherit access from this repository so the workflow token can pull it.
 - Keep a verified PostgreSQL backup before applying non-trivial production migrations.
+
+## Replacement server bootstrap
+
+On a new empty server, the first manual workflow run renders a full
+production `.env` from GitHub Environment secrets and variables.
+On later runs, the existing server-side runtime settings are kept;
+only image revisions and YooKassa credentials are updated.
+
+Before the first run:
+
+- Install Docker Engine and the Docker Compose plugin on the server.
+- Allow inbound SSH, HTTP (80) and HTTPS (443).
+- Update the `production` secrets `SERVER_HOST`, `SERVER_PORT`,
+  `SERVER_USER`, `SERVER_KNOWN_HOSTS`, and the SSH key or password.
+- Verify the new server's SSH host key through a trusted channel.
+- Set `AUTOBOT_DB_PASSWORD`, `TELEGRAM_BOT_TOKEN`,
+  `BOT_SERVICE_ACTIVE_SECRET`, `YOOKASSA_SHOP_ID`,
+  and `YOOKASSA_SECRET_KEY` as environment secrets.
+- Set `API_PUBLIC_URL` and `BOT_SERVICE_ACTIVE_KEY_ID`
+  as environment variables.
+- Optionally set `GPTUNNEL_API_KEY` and AI model configuration.
+
+Use **Actions → Backend CI/CD → Run workflow** on `dev`.
+The backend must be healthy before the bot is deployed.
+The new PostgreSQL and Redis volumes start empty.
+To retain existing users, payment history, and schedules, restore
+a verified database backup before enabling the bot.
+
+Changing the server IP in Gateway or in ChatGPT project settings
+does not change GitHub Environment secrets. Both must be updated.
