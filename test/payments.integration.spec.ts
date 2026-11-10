@@ -433,7 +433,15 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
       signed('GET', '/api/v1/purchase-orders').expect(200),
     ]);
 
-    expect(catalogue.body.data).toContainEqual({
+    const catalogueData = (catalogue.body as { data: unknown[] }).data;
+    const walletData = (walletView.body as { data: unknown }).data;
+    const ledgerData = (ledger.body as { data: unknown }).data;
+    const singleOrderData = (
+      singleOrder.body as { data: { id: string; priceMinor: number; units: number } }
+    ).data;
+    const orderListData = (orderList.body as { data: unknown[] }).data;
+
+    expect(catalogueData).toContainEqual({
       code: 'text-20',
       creditType: 'TEXT',
       units: 20,
@@ -441,10 +449,10 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
       currency: 'RUB',
       version: 1,
     });
-    expect(walletView.body.data).toEqual(await wallets.balances(userId));
-    expect(ledger.body.data).toEqual(JSON.parse(JSON.stringify(await wallets.ledger(userId))));
-    expect(singleOrder.body.data).toEqual(orderList.body.data[0]);
-    expect(singleOrder.body.data).toMatchObject({
+    expect(walletData).toEqual(await wallets.balances(userId));
+    expect(ledgerData).toEqual(JSON.parse(JSON.stringify(await wallets.ledger(userId))));
+    expect(singleOrderData).toEqual(orderListData[0]);
+    expect(singleOrderData).toMatchObject({
       id: orderId,
       packCode: 'text-20',
       creditType: 'TEXT',
@@ -456,8 +464,8 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
     });
     expect(await purchases.get(userId, orderId)).toMatchObject({
       id: orderId,
-      priceMinor: singleOrder.body.data.priceMinor,
-      units: singleOrder.body.data.units,
+      priceMinor: singleOrderData.priceMinor,
+      units: singleOrderData.units,
     });
   });
   it('retains order snapshots through the additive migration rollback/reapply', async () => {
