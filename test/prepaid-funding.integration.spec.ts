@@ -234,6 +234,55 @@ describe('prepaid funding reservations through PostgreSQL', () => {
     ).toMatchObject({ available: 2, reserved: 0 });
   });
 
+  it('grants a separate allowance to each materialized recurring publication occurrence', async () => {
+    const original = await prisma.publication.findUniqueOrThrow({ where: { id: publicationId } });
+    const firstRun = new Date();
+    const schedule = await prisma.postSchedule.create({
+      data: {
+        postId: original.postId,
+        kind: 'RECURRING',
+        timezone: 'UTC',
+        runAt: firstRun,
+        rrule: 'FREQ=DAILY;COUNT=2',
+        nextRunAt: firstRun,
+        misfirePolicy: 'LATEST_ONLY',
+        misfireGraceSeconds: 60,
+      },
+    });
+    const schedules = app.get(SchedulesService);
+    expect(await schedules.materializeDue(firstRun)).toBe(1);
+    const firstOccurrence = await prisma.publication.findFirstOrThrow({
+      where: { scheduleId: schedule.id },
+    });
+    await generation.generate(firstOccurrence.id);
+
+    const secondRun = new Date(firstRun.getTime() + 24 * 60 * 60 * 1000);
+    expect(await schedules.materializeDue(secondRun)).toBe(1);
+    const secondOccurrence = await prisma.publication.findFirstOrThrow({
+      where: { scheduleId: schedule.id, id: { not: firstOccurrence.id } },
+    });
+    await generation.generate(secondOccurrence.id);
+
+    expect(
+      await prisma.textRevisionAllowance.findMany({
+        where: { publicationId: { in: [firstOccurrence.id, secondOccurrence.id] } },
+        orderBy: { publicationId: 'asc' },
+      }),
+    ).toHaveLength(2);
+    for (const occurrenceId of [firstOccurrence.id, secondOccurrence.id]) {
+      expect(
+        await prisma.textRevisionAllowance.findUniqueOrThrow({
+          where: { publicationId: occurrenceId },
+        }),
+      ).toMatchObject({ includedTotal: 3, includedCommitted: 0, includedReserved: 0 });
+    }
+    expect(
+      await prisma.generationWallet.findUniqueOrThrow({
+        where: { userId_creditType: { userId, creditType: 'TEXT' } },
+      }),
+    ).toMatchObject({ available: 1, reserved: 0 });
+  });
+
   it('keeps the hold and running attempt if persisting a successful provider result fails', async () => {
     await funding.reserveText(userId, publicationId);
     const commit = vi

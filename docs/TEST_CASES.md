@@ -1259,19 +1259,19 @@ Retest RUN-ID и результат:
 - LIVE прогон выполнен в разрешённых каналах; секреты и provider payloads не попали в отчёт.
 - Test cleanup завершён; незавершённые/повторяющиеся тестовые публикации не оставлены активными.
 
-## Generation pack migration acceptance — 2026-10-19 (pending)
+## Generation pack migration acceptance — 2026-11-10
 
-Prior subscription/monthly-usage and no-image-preview cases document legacy coverage; they are not acceptance criteria for the target billing model. Use [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md) for replacement requirements. Historical PASS/Готово results remain historical.
+Prior subscription/monthly-usage and no-image-preview cases document legacy coverage; they are not acceptance criteria for the target billing model. Backend implementation remains behind disabled rollout flags. Results below are from the new prepaid integration tests, not the historical acceptance runs. See [RUN-20261110-001](test-runs/RUN-20261110-001.md). The bot UI/client portion of PACK-010 remains blocked on client integration.
 
 | Case     | Expected behavior                                                                                 | Status  |
 | -------- | ------------------------------------------------------------------------------------------------- | ------- |
-| PACK-001 | Initial text consumes 1 TEXT and grants exactly three included successful revisions               | NOT_RUN |
-| PACK-002 | Fourth and later revisions cost 1 TEXT after confirmation; allowance does not reset               | NOT_RUN |
-| PACK-003 | Every generated recurring occurrence has its own initial debit and allowance                      | NOT_RUN |
-| PACK-004 | Every image replacement costs 1 IMAGE; selected preview is reused at publication                  | NOT_RUN |
-| PACK-005 | Duplicate payment notifications grant credits once; forged/redirect-only confirmation grants none | NOT_RUN |
-| PACK-006 | Concurrent last-credit and last-included-revision requests cannot overspend                       | NOT_RUN |
-| PACK-007 | Technical failures release reservations; delivery retry does not regenerate or charge again       | NOT_RUN |
-| PACK-008 | Purchased balances survive month boundaries; gifts granted once                                   | NOT_RUN |
-| PACK-009 | Insufficient funds blocks the relevant operation; top-up/resume is idempotent                     | NOT_RUN |
-| PACK-010 | Client views, backend balances and purchase history agree                                         | NOT_RUN |
+| PACK-001 | Initial text consumes 1 TEXT and grants exactly three included successful revisions               | PASS |
+| PACK-002 | Fourth and later revisions cost 1 TEXT after confirmation; allowance does not reset               | PASS |
+| PACK-003 | Every generated recurring occurrence has its own initial debit and allowance                      | PASS |
+| PACK-004 | Every image replacement costs 1 IMAGE; selected preview is reused at publication                  | PASS |
+| PACK-005 | Duplicate payment notifications grant credits once; forged/redirect-only confirmation grants none | PASS |
+| PACK-006 | Concurrent last-credit and last-included-revision requests cannot overspend                       | PASS |
+| PACK-007 | Technical failures release reservations; delivery retry does not regenerate or charge again       | PASS |
+| PACK-008 | Purchased balances survive month boundaries; gifts granted once                                   | PASS |
+| PACK-009 | Insufficient funds blocks the relevant operation; top-up/resume is idempotent                     | PASS |
+| PACK-010 | Client UI views, backend balances and purchase history agree                                      | BLOCKED_FEATURE — backend API/persisted-state consistency passed; bot UI integration is pending |

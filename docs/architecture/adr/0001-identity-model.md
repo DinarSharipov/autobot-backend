@@ -1,6 +1,6 @@
 # ADR 0001: Canonical user and Telegram identity model
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. This accepted ADR records the original identity model; prepaid backend flows are implemented separately behind disabled rollout flags. Legacy behavior and historical verification below must not be treated as the new billing contract.
 
 - Status: Accepted
 - Date: 2026-10-08

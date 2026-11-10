@@ -1,6 +1,6 @@
 # Stage 1: Contracts and domain design
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The original architecture baseline describes legacy subscription behavior; prepaid backend extensions are implemented behind disabled rollout flags, with acceptance and production cutover pending.
 
 ## Status
 

@@ -1,6 +1,6 @@
 # IMPLEMENTATION_PLAN.md
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. Backend prepaid billing and media flows are implemented behind disabled rollout flags; production cutover and client integration remain pending. Legacy behavior and historical verification below must not be treated as the new billing contract.
 
 ## Goal
 
@@ -22,8 +22,8 @@ Implementation is split into dependency-ordered stages. Each stage has its own d
 | 1     | [Contracts and domain design](./implementation-plans/01-contracts-and-domain/IMPLEMENTATION_PLAN.md)          | Approved API, identity, state, scheduling, and data contracts                              |
 | 2     | [Backend foundation](./implementation-plans/02-backend-foundation/IMPLEMENTATION_PLAN.md)                     | Runnable NestJS service with PostgreSQL, Redis, BullMQ, Docker, and baseline observability |
 | 3     | [Identity and access](./implementation-plans/03-identity-and-access/IMPLEMENTATION_PLAN.md)                   | Unified Telegram identity, browser sessions, bot service authentication, and protected API |
-| 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Channels, topics, prepaid wallets, packs, and centralized credit accounting                |
-| 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Generation, versioning, moderation, scheduling, and idempotent Telegram publication        |
+| 4     | [Core domain and entitlements](./implementation-plans/04-core-domain-and-entitlements/IMPLEMENTATION_PLAN.md) | Legacy entitlements complete; prepaid wallet and credit flows implemented, rollout pending |
+| 5     | [Publication pipeline](./implementation-plans/05-publication-pipeline/IMPLEMENTATION_PLAN.md)                 | Legacy pipeline complete; prepaid text/media extensions implemented, acceptance pending    |
 | 6     | [Production readiness](./implementation-plans/06-production-readiness/IMPLEMENTATION_PLAN.md)                 | Tested CI/CD, secure deployment, monitoring, backup, and operational runbooks              |
 | 7     | Final Web Admin activation (postponed)                                                                        | Register Telegram OIDC URLs, configure browser login, CORS, cookies, and live verification |
 
@@ -52,28 +52,27 @@ A stage is complete only when:
 - operational configuration is documented without committing secrets;
 - `IMPLEMENTATION_STATUS.md` is updated with verified progress.
 
-## Priority: generation packs migration (2026-10-19)
+## Generation packs migration status
 
 ## Backend delivery plan
 
-- [ ] Finalize billing, allowance and selected-image OpenAPI/domain contracts before client implementation.
-- [ ] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
-- [ ] Replace subscription-gated policies and monthly quotas with prepaid credits and global resource caps.
-- [ ] Implement one initial TEXT debit plus three included revisions and paid revisions thereafter.
-- [ ] Make recurring occurrence, failure, cancellation, retry and insufficient-funds accounting atomic.
-- [ ] Implement purchase catalogue, YooKassa checkout, payment reconciliation and compensating refund ledger.
-- [ ] Add selected-image preview/regeneration/approval/reuse and update media ADR/retention contracts.
-- [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
-- [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
-- [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+- [x] Finalize additive billing, allowance and selected-image OpenAPI/domain contracts.
+- [x] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
+- [ ] Complete legacy subscription/quota write-path cutover and global resource-cap policy migration.
+- [x] Implement initial TEXT debit, three included revisions, confirmed paid revisions, and insufficient-funds resume.
+- [x] Implement recurring occurrence and generation reservation/settlement behavior for the prepaid path.
+- [x] Implement test catalogue/checkout, verified fulfillment, payment/refund reconciliation and compensating ledger.
+- [x] Implement selected-image preview/replacement/approval/reuse and update media ADR/retention contracts.
+- [ ] Rehearse production legacy cutover and rollback; do not invent a conversion of old quotas.
+- [x] Update runtime provisioning, README/configuration, OpenAPI, and backend operational instructions; bot integration remains pending.
+- [ ] Run and record the complete generation-pack acceptance suite; historical acceptance results must not be rewritten.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
 
 Use [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md) as the billing contract; supersede conflicting legacy tasks above.
 
 ## Purchase integration coordination — 2026-10-19
 
-Status: planned only; this documentation does not activate checkout or deploy billing.
+Status: backend test-checkout implementation exists; checkout and prepaid generation remain disabled by default. This does not claim live payment acceptance or production activation.
 Backend owns prices, orders, payment verification and credit accounting. Clients only display
 backend state. Canonical prices and the one-time gift (3 TEXT + 1 IMAGE) are maintained in
 [backend PRICING.md](https://github.com/DinarSharipov/autobot-backend/blob/dev/docs/PRICING.md);
@@ -88,7 +87,16 @@ remove that requirement. Record the production sales-channel decision before ena
 purchase entry point. Keep payment adapters separate from wallet accounting.
 Reference: https://core.telegram.org/bots/payments-stars
 
-Proposed shared contracts (finalize in backend OpenAPI before implementation):
+Historical proposed contract (superseded by implementation):
+
+The proposals and unchecked discovery checklist below record the original planning snapshot; they
+are not current implementation status. The implemented API is documented in
+[BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md), [PREPAID_TEXT_FUNDING.md](PREPAID_TEXT_FUNDING.md),
+[PREPAID_MEDIA.md](PREPAID_MEDIA.md), [BILLING_REFUNDS.md](BILLING_REFUNDS.md), and
+[`docs/openapi/billing.openapi.json`](openapi/billing.openapi.json). Production activation and
+full acceptance remain pending as listed in [GENERATION_PACKS_PLAN.md](GENERATION_PACKS_PLAN.md).
+
+The original proposal was:
 
 - GET /api/v1/billing/packs: server catalogue, version, credit type, quantity, RUB amount.
 - GET /api/v1/billing/balance: available/reserved TEXT and IMAGE.

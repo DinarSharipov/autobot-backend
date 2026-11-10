@@ -389,6 +389,77 @@ describe('test checkout through REST, provider HTTP and PostgreSQL', () => {
       await prisma.generationWallet.findFirst({ where: { userId, creditType: 'IMAGE' } }),
     ).toMatchObject({ available: 0, reserved: 1 });
   });
+
+  it('keeps purchased balances across month boundaries and grants the onboarding gift once', async () => {
+    await wallets.grant({
+      userId,
+      creditType: 'TEXT',
+      units: 20,
+      operationKey: 'month-boundary-purchase',
+      kind: 'PURCHASE',
+    });
+    const before = await signed('GET', '/api/v1/wallets').expect(200);
+    expect(before.body).toMatchObject({
+      data: [
+        { creditType: 'TEXT', available: 23, reserved: 0, debt: 0 },
+        { creditType: 'IMAGE', available: 1, reserved: 0, debt: 0 },
+      ],
+    });
+    await prisma.creditLedgerEntry.updateMany({
+      where: { wallet: { userId }, kind: { in: ['GIFT', 'PURCHASE'] } },
+      data: { createdAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
+
+    const after = await signed('GET', '/api/v1/wallets').expect(200);
+    expect(after.body).toEqual(before.body);
+    expect(
+      await prisma.creditLedgerEntry.count({ where: { wallet: { userId }, kind: 'GIFT' } }),
+    ).toBe(2);
+    expect(
+      await prisma.creditLedgerEntry.count({ where: { wallet: { userId }, kind: 'PURCHASE' } }),
+    ).toBe(1);
+  });
+
+  it('keeps catalogue, wallet, ledger and purchase-order API views aligned with persisted state', async () => {
+    const catalogue = await signed('GET', '/api/v1/generation-packs').expect(200);
+    const walletView = await signed('GET', '/api/v1/wallets').expect(200);
+    const ledger = await signed('GET', '/api/v1/wallets/ledger').expect(200);
+    const orderResponse = await signed('POST', '/api/v1/purchase-orders', {
+      packCode: 'text-20',
+    }).expect(201);
+    const orderId = (orderResponse.body as { data: { id: string } }).data.id;
+    const [singleOrder, orderList] = await Promise.all([
+      signed('GET', `/api/v1/purchase-orders/${orderId}`).expect(200),
+      signed('GET', '/api/v1/purchase-orders').expect(200),
+    ]);
+
+    expect(catalogue.body.data).toContainEqual({
+      code: 'text-20',
+      creditType: 'TEXT',
+      units: 20,
+      priceMinor: 9900,
+      currency: 'RUB',
+      version: 1,
+    });
+    expect(walletView.body.data).toEqual(await wallets.balances(userId));
+    expect(ledger.body.data).toEqual(JSON.parse(JSON.stringify(await wallets.ledger(userId))));
+    expect(singleOrder.body.data).toEqual(orderList.body.data[0]);
+    expect(singleOrder.body.data).toMatchObject({
+      id: orderId,
+      packCode: 'text-20',
+      creditType: 'TEXT',
+      units: 20,
+      priceMinor: 9900,
+      status: 'PENDING',
+      paymentStatus: 'NOT_CREATED',
+      fulfillmentStatus: 'PENDING',
+    });
+    expect(await purchases.get(userId, orderId)).toMatchObject({
+      id: orderId,
+      priceMinor: singleOrder.body.data.priceMinor,
+      units: singleOrder.body.data.units,
+    });
+  });
   it('retains order snapshots through the additive migration rollback/reapply', async () => {
     const initial = await order();
     const client = new Client({ connectionString: process.env.DATABASE_URL });

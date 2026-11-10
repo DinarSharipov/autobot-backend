@@ -1,6 +1,6 @@
 # Domain model
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The prepaid domain and media extensions are implemented additively behind disabled rollout flags. Legacy behavior and historical verification below must not be treated as the new billing contract; production cutover remains pending.
 
 ## Aggregate boundaries
 
@@ -79,7 +79,7 @@ erDiagram
 - Each idempotent command is unique by principal, operation, and idempotency key in the idempotency store introduced during implementation.
 - Outbox rows are written in the domain transaction and may be retried until delivered.
 
-## Prepaid balances and generation allowances (target, pending)
+## Prepaid balances and generation allowances (implemented; production cutover pending)
 
 - Separate TEXT/IMAGE wallets have available and reserved integer balances with no monthly reset.
 - Purchased packs are snapshotted in orders; verified successful payments grant credits once.
@@ -89,7 +89,7 @@ erDiagram
 - Ledger and reserve/commit/release operations are idempotent and concurrency-safe.
 - Global active channel/topic caps are independent of pack size and paid tiers.
 - See [generation pack plan](../GENERATION_PACKS_PLAN.md) for migration and payment invariants.
-- Existing Subscription/SubscriptionPlan/monthly UsageCounter schema is legacy until migration.
+- Existing Subscription/SubscriptionPlan/monthly UsageCounter schema remains the active production path until coordinated cutover.
 
 ## Audit policy
 

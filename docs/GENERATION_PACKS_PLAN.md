@@ -4,8 +4,11 @@
 
 Approved product direction. This document replaces subscription tiers, monthly generation quotas,
 subscription-gated moderation/images, and previous restrictions excluding image review.
-Implementation and migration are IN PROGRESS; existing subscription code is legacy, not evidence that
-prepaid balances already work in production. Historical test results describe the code tested at that time.
+Backend implementation is complete for additive wallets, text funding, selected-media lifecycle,
+test checkout, reconciliation and test refund compensation. These paths remain behind disabled
+rollout flags; production balances/payments are not activated. Client integration, full acceptance,
+legacy cutover, and production payment-channel decision remain pending. Historical test results
+describe the code tested at that time.
 Web Admin implementation, deployment, and activation remain postponed.
 
 Concrete backend changes, migration sequencing and API work are recorded in
@@ -103,7 +106,11 @@ price and catalogue version. Documentation does not enable live checkout.
 - Keep the existing 4096 token output ceiling until measured changes are validated; enforce Telegram
   character limits independently. Failed corrective attempts do not charge user credits.
 
-## Acceptance criteria (pending)
+## Acceptance criteria (backend verified; client integration pending)
+
+Backend cases PACK-001–PACK-009 passed on 2026-11-10 using isolated PostgreSQL/Redis integration
+tests. PACK-010's backend API/persisted-state comparison passed; the bot UI portion remains pending
+until client integration. Evidence: [RUN-20261110-001](test-runs/RUN-20261110-001.md).
 
 1. Initial text costs 1 TEXT; exactly three successful revisions are included; later revisions cost
    1 TEXT without resetting allowance. New recurring occurrences have independent allowances.
@@ -118,23 +125,22 @@ price and catalogue version. Documentation does not enable live checkout.
 10. Legacy migration and rollback are rehearsed with in-flight work; historical results are not
     relabelled as successful tests of the new model.
 
-## Backend delivery plan
+## Backend delivery status
 
-- [ ] Finalize billing, allowance and selected-image OpenAPI/domain contracts before client implementation.
+- [x] Finalize additive billing, allowance and selected-image OpenAPI/domain contracts.
 - [x] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
-- [ ] Replace subscription-gated policies and monthly quotas with prepaid credits and global resource caps.
-- [ ] Implement one initial TEXT debit plus three included revisions and paid revisions thereafter.
-- [ ] Make recurring occurrence, failure, cancellation, retry and insufficient-funds accounting atomic.
-- [ ] Implement purchase catalogue, YooKassa checkout, payment reconciliation and compensating refund ledger.
-- [ ] Add selected-image preview/regeneration/approval/reuse and update media ADR/retention contracts.
-- [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
-- [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
-- [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+- [ ] Complete legacy subscription/quota write-path cutover and global resource-cap policy migration.
+- [x] Implement initial TEXT debit, three included revisions, confirmed paid revisions, and insufficient-funds resume.
+- [x] Implement recurring occurrence and generation reservation/settlement behavior for the prepaid path.
+- [x] Implement test catalogue/checkout, verified fulfillment, explicit payment/refund reconciliation and compensating refund ledger.
+- [x] Implement selected-image preview/replacement/approval/reuse and update media ADR/retention contracts.
+- [ ] Rehearse production legacy cutover and rollback; do not invent a conversion of old quotas.
+- [x] Update backend runtime provisioning, README/configuration, OpenAPI, and backend operational instructions; bot integration remains pending.
+- [ ] Run and record the complete generation-pack acceptance suite; historical acceptance results must not be rewritten.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
 
 ## Detailed purchase delivery tasks
 
 Repository-specific checkout tasks, shared proposed APIs, dependencies and launch preparation are
 tracked in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#purchase-integration-coordination--2026-10-19).
-All purchase implementation and activation items remain pending.
+Purchase backend implementation is present for the test-only YooKassa flow and refunds. Controlled real test-shop acceptance, production Stars/channel decision, bot integration and activation remain pending.

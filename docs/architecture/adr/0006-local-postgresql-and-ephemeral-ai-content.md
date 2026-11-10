@@ -1,6 +1,6 @@
 # ADR 0006: Local PostgreSQL and ephemeral AI content
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. ADR 0007 and the prepaid media implementation extend the original image workflow behind disabled rollout flags. Legacy behavior and historical verification below must not be treated as the new billing contract.
 
 - Status: Accepted; supersedes ADR 0005. Image timing/preview/retry rules for prepaid publications are superseded by ADR 0007.
 - Date: 2026-10-08

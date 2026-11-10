@@ -1,6 +1,6 @@
 # Scheduling and delivery semantics
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. These scheduling semantics describe the original pipeline; prepaid occurrence funding and selected-media behavior are implemented separately behind disabled rollout flags. Legacy behavior and historical verification below must not be treated as the new billing contract.
 
 ## Schedule types
 

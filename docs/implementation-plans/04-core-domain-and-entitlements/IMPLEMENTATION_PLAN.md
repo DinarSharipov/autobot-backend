@@ -2,8 +2,9 @@
 
 ## Status
 
-Legacy channel/topic/subscription foundation was completed on 2026-10-08.
-The prepaid transition approved on 2026-10-19 is PENDING and reopens billing deliverables.
+Legacy channel/topic/subscription foundation was completed on 2026-10-08. The additive prepaid
+wallet, purchase, text-funding and media implementation is present behind disabled rollout flags.
+Full acceptance, client integration, legacy cutover and production activation remain open.
 [Generation packs plan](../../GENERATION_PACKS_PLAN.md) is authoritative.
 
 ## Target scope
@@ -14,23 +15,23 @@ global channel/topic caps and occurrence-scoped included text revisions.
 
 ## Backend delivery plan
 
-- [ ] Finalize billing, allowance and selected-image OpenAPI/domain contracts before client implementation.
-- [ ] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
-- [ ] Replace subscription-gated policies and monthly quotas with prepaid credits and global resource caps.
-- [ ] Implement one initial TEXT debit plus three included revisions and paid revisions thereafter.
-- [ ] Make recurring occurrence, failure, cancellation, retry and insufficient-funds accounting atomic.
-- [ ] Implement purchase catalogue, YooKassa checkout, payment reconciliation and compensating refund ledger.
-- [ ] Add selected-image preview/regeneration/approval/reuse and update media ADR/retention contracts.
-- [ ] Document and rehearse legacy cutover and rollback; do not invent a conversion of old quotas.
-- [ ] Update runtime provisioning, README/configuration, OpenAPI, bot integration and operational runbooks.
-- [ ] Add meaningful backend unit/integration/contract tests for all acceptance cases; run lint, typecheck,
-      build and existing required checks. Add billing cases to the acceptance catalogue without rewriting history.
+- [x] Finalize additive billing, allowance and selected-image OpenAPI/domain contracts.
+- [x] Add wallet/ledger/reservation/order/payment/allowance schema and migrations with concurrency constraints.
+- [ ] Complete legacy subscription/quota write-path cutover and global resource-cap policy migration.
+- [x] Implement one initial TEXT debit plus three included revisions and explicitly confirmed paid revisions.
+- [x] Implement recurring occurrence, failure, cancellation, retry and insufficient-funds accounting for prepaid work.
+- [x] Implement test purchase catalogue/checkout, payment reconciliation and compensating refund ledger.
+- [x] Add selected-image preview/replacement/approval/reuse and update media ADR/retention contracts.
+- [ ] Document and rehearse production cutover and rollback without converting old quotas implicitly.
+- [x] Update backend provisioning, README/configuration, OpenAPI and operational instructions; bot integration remains pending.
+- [ ] Run and record the complete generation-pack acceptance suite without rewriting historical results.
 - [ ] Deploy only after compatible client contracts and migration verification are complete.
 
 ## Exit criteria
 
 All pending acceptance criteria in GENERATION_PACKS_PLAN.md pass, both client contracts are compatible,
 migration preserves history/in-flight work, and runtime status explicitly identifies the active billing mode.
+Implementation items above are present; exit criteria remain open pending acceptance and coordinated cutover.
 No existing legacy PASS result is proof that prepaid billing works.
 
 ## Archived legacy implementation record

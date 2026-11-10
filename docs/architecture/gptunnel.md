@@ -1,6 +1,6 @@
 # GPTunnel AI integration
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](../GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. Prepaid text funding and selected-media workflows are implemented behind disabled rollout flags; production cutover remains pending. Legacy behavior and historical verification below must not be treated as the new billing contract.
 
 The backend uses GPTunnel exclusively. Provider HTTP and response parsing are isolated behind
 `GptunnelClient`, `GptunnelTextGenerationAdapter`, and `GptunnelImageGenerationAdapter`.

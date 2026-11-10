@@ -1,6 +1,6 @@
 # IMPLEMENTATION_STATUS.md
 
-> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. The transition is planned, not implemented. Legacy behavior and historical verification below must not be treated as the new billing contract.
+> Product decision (2026-10-19): [Generation packs and prepaid balances](GENERATION_PACKS_PLAN.md) supersedes subscription tiers/monthly quotas and the old exclusion of image preview. Backend prepaid billing, text funding, selected media, test checkout, reconciliation, and test refund compensation are implemented behind disabled rollout flags. Legacy behavior and historical verification below must not be treated as the new billing contract. Production payment-channel decision, client cutover, and rollout remain pending.
 
 ## Current status
 
@@ -13,7 +13,11 @@
 
 Stages 1–4 are complete: contracts, backend foundation, bot service access, and core
 domain/entitlements are runtime-verified.
-Stage 5 is in progress: post definitions and immediate publication occurrences use an atomic
+Stage 5 legacy publication pipeline is implemented and runtime-verified. Its prepaid extensions
+(wallet funding, paid revisions, selected-image preview/reuse, and blocked-funds recovery) are also
+implemented behind `PREPAID_GENERATION_ENABLED=false`; checkout and webhook flags remain disabled
+by default. Full generation-pack acceptance, client cutover, legacy migration/cutover and production
+rollout are still pending. Post definitions and immediate publication occurrences use an atomic
 text-usage reservation and durable outbox event. The GPTunnel Chat Completions adapter and generation worker
 persist immutable versions plus content-free accounting metadata. Moderation approval, rejection,
 and revision requests now use optimistic versions, idempotent commands, immutable replacement
@@ -129,21 +133,25 @@ Telegram channel.
   isolated native PostgreSQL 14.19 and Redis 8.0.0; external GPTunnel/Telegram HTTP was mocked.
   Compose interpolation was checked for both default and explicit JSON image parameters.
 
-## Generation packs transition — 2026-10-19
+## Generation packs transition — implementation status
 
 - [x] Product direction and cross-repository plan documented.
-- [ ] Prepaid TEXT/IMAGE balances, orders and payments implemented.
-- [ ] Three included text revisions and paid extra revisions implemented.
-- [ ] Image preview, paid replacement and selected-image reuse implemented.
-- [ ] Legacy migration, client integration and new acceptance checks completed.
+- [x] Additive TEXT/IMAGE wallets, ledger, reservations, pack catalogue, order snapshots and idempotent gift provision implemented.
+- [x] Test checkout, provider verification, webhook fulfillment, bounded reconciliation, and compensating test-refund ledger implemented.
+- [x] Three included text revisions, explicitly confirmed paid revisions, blocked-funds handling, and idempotent resume implemented behind the disabled prepaid flag.
+- [x] Image preview, paid replacement, selection, Telegram file reference reuse, and delivery retry behavior implemented behind the disabled prepaid flag.
+- [x] Backend generation-pack acceptance completed: PACK-001–PACK-009 PASS against PostgreSQL/Redis integration tests; PACK-010 API/persisted-state checks pass, with bot UI integration still pending.
+- [ ] Bot integration and coordinated client migration completed.
+- [ ] Legacy production cutover/rollback rehearsal and production rollout completed.
 
-Existing checked subscription/usage items above describe legacy implementation only. New billing is not deployed.
+Existing checked subscription/usage items above describe the legacy implementation. The additive prepaid path is implemented and backend acceptance is recorded in [RUN-20261110-001](test-runs/RUN-20261110-001.md), but its feature flag and test checkout/webhook are disabled by default; this status does not claim production activation or live payment/refund verification. Bot UI acceptance remains pending.
 
-## Purchase integration planning — 2026-10-19
+## Purchase integration — implementation status
 
 - [x] Repository responsibilities, shared proposed API, dependencies and launch preparation
       recorded in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#purchase-integration-coordination--2026-10-19).
-- [ ] Wallets, YooKassa checkout, verified fulfillment, reconciliation and refunds implemented.
-- [ ] Payment acceptance and deployment verified for this repository's scope.
+- [x] Additive wallets, test-only YooKassa checkout, verified fulfillment, explicit reconciliation and compensating test refunds implemented.
+- [ ] Controlled test-shop payment/refund acceptance and deployment verified for this repository's scope.
+- [ ] Production payment channel decision, production Stars/channel implementation, client cutover and activation completed.
 
-This update is documentation only; no checkout activation or runtime verification is claimed.
+No real payment/refund or production checkout activation is claimed. Automated provider tests use mocked HTTP; controlled test-shop acceptance remains pending.
