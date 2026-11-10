@@ -195,7 +195,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
-      url: ${{ vars.API_PUBLIC_URL || 'https://autobot.45.131.135.15.sslip.io' }}
+      url: ${{ vars.API_PUBLIC_URL }}
     concurrency:
       group: production-backend
       cancel-in-progress: false
@@ -203,7 +203,7 @@ jobs:
       contents: read
       packages: read
     env:
-      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL || 'https://autobot.45.131.135.15.sslip.io' }}
+      API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
       EXPECTED_SHA: ${{ github.sha }}
       AUTOBOT_API_IMAGE: ${{ needs.containers.outputs.api-image }}
       AUTOBOT_MIGRATION_IMAGE: ${{ needs.containers.outputs.migration-image }}
@@ -218,6 +218,28 @@ jobs:
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID }}
       YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
+      AUTOBOT_DB_PASSWORD: ${{ secrets.AUTOBOT_DB_PASSWORD }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      BOT_SERVICE_ACTIVE_SECRET: ${{ secrets.BOT_SERVICE_ACTIVE_SECRET }}
+      BOT_SERVICE_ACTIVE_KEY_ID: ${{ vars.BOT_SERVICE_ACTIVE_KEY_ID }}
+      AUTOBOT_DB_USER: ${{ vars.AUTOBOT_DB_USER }}
+      AUTOBOT_DB_NAME: ${{ vars.AUTOBOT_DB_NAME }}
+      GPTUNNEL_API_KEY: ${{ secrets.GPTUNNEL_API_KEY }}
+      GPTUNNEL_USE_WALLET_BALANCE: ${{ vars.GPTUNNEL_USE_WALLET_BALANCE }}
+      GPTUNNEL_IMAGE_PARAMS: ${{ vars.GPTUNNEL_IMAGE_PARAMS }}
+      AI_TEXT_MODEL: ${{ vars.AI_TEXT_MODEL }}
+      AI_IMAGE_MODEL: ${{ vars.AI_IMAGE_MODEL }}
+      AI_TEXT_MAX_TOKENS: ${{ vars.AI_TEXT_MAX_TOKENS }}
+      AI_REQUEST_TIMEOUT_MS: ${{ vars.AI_REQUEST_TIMEOUT_MS }}
+      AI_IMAGE_TIMEOUT_MS: ${{ vars.AI_IMAGE_TIMEOUT_MS }}
+      AI_IMAGE_POLL_INTERVAL_MS: ${{ vars.AI_IMAGE_POLL_INTERVAL_MS }}
+      PREPAID_GENERATION_ENABLED: ${{ vars.PREPAID_GENERATION_ENABLED }}
+      YOOKASSA_RETURN_URL: ${{ vars.YOOKASSA_RETURN_URL }}
+      YOOKASSA_TEST_CHECKOUT_ENABLED: ${{ vars.YOOKASSA_TEST_CHECKOUT_ENABLED }}
+      YOOKASSA_WEBHOOK_ENABLED: ${{ vars.YOOKASSA_WEBHOOK_ENABLED }}
+      YOOKASSA_TEST_USER_IDS: ${{ vars.YOOKASSA_TEST_USER_IDS }}
+      CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+      WEB_ALLOWED_RETURN_URLS: ${{ vars.WEB_ALLOWED_RETURN_URLS }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -227,6 +249,11 @@ jobs:
         with:
           node-version: 24.15.0
 
+      - name: Render first-deployment environment
+        env:
+          PRODUCTION_BOOTSTRAP_ENV_FILE: ${{ runner.temp }}/autobot-backend.bootstrap.env
+        run: node scripts/ci/render-production-env.mjs "$PRODUCTION_BOOTSTRAP_ENV_FILE"
+
       - name: Render protected YooKassa environment
         env:
           PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-yookassa.env
@@ -235,6 +262,7 @@ jobs:
       - name: Deploy backend containers
         env:
           PRODUCTION_ENV_FILE: ${{ runner.temp }}/autobot-yookassa.env
+          PRODUCTION_BOOTSTRAP_ENV_FILE: ${{ runner.temp }}/autobot-backend.bootstrap.env
         run: bash scripts/ci/deploy-over-ssh.sh
 
       - name: Wait for server pull deployment
