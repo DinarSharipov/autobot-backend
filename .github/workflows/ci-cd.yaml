@@ -192,7 +192,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
     needs: [containers]
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     environment:
       name: production
       url: ${{ vars.API_PUBLIC_URL }}
