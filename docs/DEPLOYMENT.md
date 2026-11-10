@@ -23,62 +23,34 @@ and must not be removed by either deployment.
 
 ## GitHub Environment
 
-Production deployments target the replacement server through GitHub Environment values,
-not a hard-coded server address. Configure the `production` environment in
-`DinarSharipov/autobot-backend` and restrict it to `dev`.
+GitHub publishes immutable images and deploys them through SSH using the protected `production`
+environment. Runtime secrets other than YooKassa remain only in the server `.env`; the workflow
+renders a mode-`0600` YooKassa-only fragment and merges it on the server without reading or logging
+the existing values. It then applies migrations, updates only the backend containers, and keeps the
+bot project untouched. The production job waits until health reports the pushed commit SHA and
+verifies OpenAPI. The server-side updater remains a recovery path for image updates that do not
+require changing runtime secrets.
 
-**Required environment secrets**:
+Create the `production` environment in `DinarSharipov/autobot-backend`, restrict it to `dev`, and
+set `API_PUBLIC_URL` to the new host's public HTTPS URL. There is no hard-coded URL fallback. During a
+deployment it renders a mode-`0600` YooKassa-only environment fragment, transfers it over SSH,
+merges it into the server environment, and verifies only the presence of the YooKassa variables in
+`autobot-api`.
 
-- `SERVER_HOST` — new server IP or SSH hostname.
-- `SERVER_PORT`, `SERVER_USER`, `SERVER_KNOWN_HOSTS` — SSH access and the independently verified new SSH host key.
-- `SERVER_SSH_KEY` (preferred) or `SERVER_PASSWORD`.
-- `AUTOBOT_DB_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `BOT_SERVICE_ACTIVE_SECRET`.
-- `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`.
+The following GitHub Environment values are required by the SSH deployment:
 
-**Required environment variable**:
+Environment secrets:
 
-- `API_PUBLIC_URL` — public HTTPS backend URL resolving to the *new* host.
-  Example: `https://autobot.NEW_IP.sslip.io`, substituting the actual address.
-  This is also used to configure Caddy's `API_HOST` and to verify the live revision.
-- `BOT_SERVICE_ACTIVE_KEY_ID` — HMAC key identifier; it must match the bot.
-
-Optional GitHub secret `GPTUNNEL_API_KEY` is needed for AI generation. Additional
-production variables supported by the initial environment renderer include
-`AUTOBOT_DB_USER`, `AUTOBOT_DB_NAME`, `AI_TEXT_MODEL`, `AI_IMAGE_MODEL`,
-`GPTUNNEL_IMAGE_PARAMS`, `GPTUNNEL_USE_WALLET_BALANCE`,
-`AI_TEXT_MAX_TOKENS`, `AI_REQUEST_TIMEOUT_MS`, `AI_IMAGE_TIMEOUT_MS`,
-`AI_IMAGE_POLL_INTERVAL_MS`, `PREPAID_GENERATION_ENABLED`,
-`YOOKASSA_RETURN_URL`, `YOOKASSA_TEST_CHECKOUT_ENABLED`,
-`YOOKASSA_WEBHOOK_ENABLED`, `YOOKASSA_TEST_USER_IDS`,
-`CORS_ALLOWED_ORIGINS` and `WEB_ALLOWED_RETURN_URLS`.
-Keep values not ready for use disabled/empty.
-
-### First deployment to an empty replacement server
-
-1. Provision a Linux server with Docker Engine and the Docker Compose plugin.
-   Expose SSH to GitHub runners, and HTTP/HTTPS for Caddy.
-2. Register and verify the new server in Gateway; verify its SSH host-key
-   fingerprint using a trustworthy channel before updating `SERVER_KNOWN_HOSTS`.
-3. Create/update the environment secrets and variables above; ensure GHCR
-   images can be pulled from this server.
-4. Manually start **Actions → Backend CI/CD → Run workflow** on `dev`.
-5. The job renders a protected full `.env` for an empty host and a small
-   YooKassa fragment for upgrades. If `/opt/autobot/backend/.env` does not exist,
-   the full file is installed; otherwise the prior server-side values are
-   preserved and only the YooKassa fragment and image SHA are updated.
-   Secret-containing staging files are mode `0600` and never committed.
-6. Wait for PostgreSQL, Redis and API health; Caddy starts after API readiness,
-   then the workflow verifies the commit SHA and OpenAPI at `API_PUBLIC_URL`.
-7. Only after the backend is healthy, deploy the separate bot repository.
-
-**Important:** This bootstraps new *empty* PostgreSQL and Redis volumes; it
-does **not** migrate data from the old server. To retain users, payments,
-schedules and channel settings, restore a verified PostgreSQL backup before
-starting the bot. Keep old server data untouched until backup/restore is verified.
-
-A push/PR to `dev` only runs backend CI validation; it does not deploy.
-`SERVER_HOST` and `SERVER_KNOWN_HOSTS` must be updated in GitHub Environment
-secrets; changing Gateway's saved host does not change GitHub Actions.
+- `SERVER_HOST`
+- `SERVER_PORT`
+- `SERVER_USER`
+- `SERVER_KNOWN_HOSTS`
+- `SERVER_SSH_KEY` (preferred) or `SERVER_PASSWORD` (fallback)
+- `AUTOBOT_DB_PASSWORD`
+- `TELEGRAM_BOT_TOKEN`
+- `BOT_SERVICE_ACTIVE_SECRET`
+- `YOOKASSA_SHOP_ID`
+- `YOOKASSA_SECRET_KEY`
 
 The test checkout contract and controlled rollout procedure are in
 [BILLING_TEST_CHECKOUT.md](BILLING_TEST_CHECKOUT.md). Verified refunds, debt accounting and rollback
@@ -171,3 +143,33 @@ OpenAPI document is available.
 - The publishing bot must have the required permissions in target channels.
 - The GHCR package must inherit access from this repository so the workflow token can pull it.
 - Keep a verified PostgreSQL backup before applying non-trivial production migrations.
+
+## Replacement server bootstrap
+
+On a new empty server, the first manual workflow run renders a full
+production `.env` from GitHub Environment secrets and variables.
+On later runs, the existing server-side runtime settings are kept;
+only image revisions and YooKassa credentials are updated.
+
+Before the first run:
+
+- Install Docker Engine and the Docker Compose plugin on the server.
+- Allow inbound SSH, HTTP (80) and HTTPS (443).
+- Update the `production` secrets `SERVER_HOST`, `SERVER_PORT`,
+  `SERVER_USER`, `SERVER_KNOWN_HOSTS`, and the SSH key or password.
+- Verify the new server's SSH host key through a trusted channel.
+- Set `AUTOBOT_DB_PASSWORD`, `TELEGRAM_BOT_TOKEN`,
+  `BOT_SERVICE_ACTIVE_SECRET`, `YOOKASSA_SHOP_ID`,
+  and `YOOKASSA_SECRET_KEY` as environment secrets.
+- Set `API_PUBLIC_URL` and `BOT_SERVICE_ACTIVE_KEY_ID`
+  as environment variables.
+- Optionally set `GPTUNNEL_API_KEY` and AI model configuration.
+
+Use **Actions → Backend CI/CD → Run workflow** on `dev`.
+The backend must be healthy before the bot is deployed.
+The new PostgreSQL and Redis volumes start empty.
+To retain existing users, payment history, and schedules, restore
+a verified database backup before enabling the bot.
+
+Changing the server IP in Gateway or in ChatGPT project settings
+does not change GitHub Environment secrets. Both must be updated.
